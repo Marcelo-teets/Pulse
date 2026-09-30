@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Pulse LinkedIn Capture",
+  "version": "0.4.0",
+  "description": "Captura dados de perfis do LinkedIn e da empresa atual e salva no banco Pulse.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://*.linkedin.com/*",
+    "https://br-delicate-glade-b46j1hyc-linkedin.compute.c-6.us-east-2.aws.neon.tech/*"
+  ],
+  "action": {
+    "default_title": "Pulse LinkedIn Capture",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/in/*",
+        "https://www.linkedin.com/company/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
