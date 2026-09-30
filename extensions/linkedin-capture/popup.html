@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pulse LinkedIn Capture</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="app">
+    <header><div><div class="eyebrow">PULSE</div><h1>LinkedIn Capture</h1></div><span id="statusDot" class="dot"></span></header>
+    <section class="card">
+      <button id="captureBtn" class="primary">Capturar pessoa + empresa</button>
+      <div id="message" class="message">Abra um perfil /in/ no LinkedIn e clique em capturar.</div>
+    </section>
+    <section id="previewCard" class="card hidden">
+      <strong id="name">—</strong><div id="linkedinUrl" class="small url">—</div><div id="location" class="muted">—</div>
+      <div class="grid">
+        <div><span>Cargo atual</span><b id="currentTitle">—</b></div>
+        <div><span>Empresa atual</span><b id="currentCompany">—</b></div>
+        <div class="full"><span>Capturado em</span><b id="capturedAt">—</b></div>
+      </div>
+      <hr><div class="eyebrow">EMPRESA</div><strong id="companyName">—</strong>
+      <div class="grid">
+        <div class="full"><span>Site</span><b id="companyWebsite">—</b></div>
+        <div class="full"><span>Funcionários</span><b id="employeeCount">—</b></div>
+        <div class="full"><span>Capturado em</span><b id="companyCapturedAt">—</b></div>
+      </div>
+      <div class="muted" id="companyDescription">—</div>
+      <button id="saveBtn" class="primary" disabled>Salvar pessoa + empresa</button>
+      <details><summary>Ver JSON bruto da pessoa</summary><pre id="jsonPreview"></pre></details>
+    </section>
+    <section class="card settings"><details><summary>Configuração da API</summary>
+      <label>Endpoint<input id="apiEndpoint"></label>
+      <label>Token da extensão<input id="apiToken" type="password"></label>
+      <button id="saveSettingsBtn" class="secondary">Salvar configuração</button>
+    </details></section>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
