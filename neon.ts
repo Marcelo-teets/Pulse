@@ -11,7 +11,9 @@ export default defineConfig({
         name: "Pulse LinkedIn Capture API",
         source: "./functions/linkedin/index.ts",
         env: {
-          PULSE_EXTENSION_TOKEN: process.env.PULSE_EXTENSION_TOKEN!,
+          PULSE_EXTENSION_TOKEN_LEGACY_CURRENT: process.env.PULSE_EXTENSION_TOKEN_LEGACY_CURRENT!,
+          PULSE_EXTENSION_TOKEN_LEGACY_PREVIOUS: process.env.PULSE_EXTENSION_TOKEN_LEGACY_PREVIOUS!,
+          PULSE_LEGACY_AUTH_UNTIL: process.env.PULSE_LEGACY_AUTH_UNTIL!,
         },
       },
     },
