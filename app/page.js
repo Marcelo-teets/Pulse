@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 
 const navItems = [
-  ["Visão geral", "⌁"],
-  ["Pessoas", "◎"],
-  ["Empresas", "▦"],
-  ["Sincronização", "↻"],
+  ["Visão geral", "⌁", "/"],
+  ["Pessoas", "◎", "/pessoas"],
+  ["Empresas", "▦", "/empresas"],
+  ["Sincronização", "↻", "/sincronizacao"],
 ];
 
 function formatDate(value) {
@@ -106,15 +106,16 @@ export default function Home() {
         </div>
 
         <nav>
-          {navItems.map(([label, icon]) => (
-            <button
+          {navItems.map(([label, icon, href]) => (
+            <a
               key={label}
+              href={href}
               onClick={() => setActive(label)}
               className={active === label ? "nav-item active" : "nav-item"}
             >
               <span>{icon}</span>
               {label}
-            </button>
+            </a>
           ))}
         </nav>
 
