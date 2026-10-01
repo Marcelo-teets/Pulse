@@ -97,6 +97,6 @@ O workflow `.github/workflows/frontend-ci.yml` valida o build do Next.js em cada
 
 ### Deploy Vercel
 
-O projeto Vercel existente é `pulse`. A Production Branch deve ser `main` e o repositório conectado deve ser `Marcelo-teets/Pulse`.
+O projeto Vercel existente é `pulse`. A Production Branch é `main` e o repositório conectado é `Marcelo-teets/Pulse`. Pushes em `main` devem gerar deploy automático de produção.
 
 Por segurança, o frontend trata a ausência de `DATABASE_URL` como estado degradado e continua carregando sem expor credenciais.
