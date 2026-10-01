@@ -100,3 +100,26 @@ O workflow `.github/workflows/frontend-ci.yml` valida o build do Next.js em cada
 O projeto Vercel existente é `pulse`. A Production Branch é `main` e o repositório conectado é `Marcelo-teets/Pulse`. Pushes em `main` devem gerar deploy automático de produção.
 
 Por segurança, o frontend trata a ausência de `DATABASE_URL` como estado degradado e continua carregando sem expor credenciais.
+
+
+## Google Sheets Worker
+
+A fila `public.linkedin_sheet_sync_queue` é criada automaticamente por trigger após cada captura de empresa.
+
+O endpoint interno `/api/internal/sheets-sync` processa a fila em lotes, usando `FOR UPDATE SKIP LOCKED`, atualiza as abas `Capturas`, `Pessoas`, `Empresas` e `Operação`, e só marca o item como `synced` após a escrita no Google Sheets concluir.
+
+O Vercel Cron chama esse endpoint a cada 5 minutos.
+
+### Variáveis obrigatórias no Vercel
+
+```bash
+DATABASE_URL=postgresql://...
+GOOGLE_SHEET_ID=1EKbcfGbp1lvuDSBRv4H87bqhQVx17XgUwRO9FH6iDkQ
+GOOGLE_SERVICE_ACCOUNT_EMAIL=...
+GOOGLE_PRIVATE_KEY=...
+CRON_SECRET=...
+```
+
+A service account precisa ter permissão de edição na planilha do Pulse.
+
+Falhas de sincronização retornam o item para `error` com `next_attempt_at` futuro. O worker é idempotente na camada canônica e a fila continua sendo a fonte operacional de retry.
