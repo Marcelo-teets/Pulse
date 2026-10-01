@@ -7,6 +7,7 @@ const navItems = [
   ["Pessoas", "◎", "/pessoas"],
   ["Empresas", "▦", "/empresas"],
   ["Sincronização", "↻", "/sincronizacao"],
+  ["Operação", "◫", "/operacao"],
 ];
 
 function formatDate(value) {

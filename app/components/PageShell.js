@@ -7,6 +7,7 @@ const navItems = [
   ["Pessoas", "◎", "/pessoas"],
   ["Empresas", "▦", "/empresas"],
   ["Sincronização", "↻", "/sincronizacao"],
+  ["Operação", "◫", "/operacao"],
 ];
 
 export default function PageShell({ title, eyebrow = "PULSE CONTROL CENTER", actions, children }) {
