@@ -1,0 +1,14 @@
+{
+  "name": "pulse",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "neon:deploy": "neon deploy",
+    "neon:dev": "neon dev"
+  },
+  "dependencies": {
+    "@neon/config": "latest",
+    "@neon/functions": "latest",
+    "pg": "latest"
+  }
+}
