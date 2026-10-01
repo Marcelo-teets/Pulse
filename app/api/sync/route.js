@@ -39,13 +39,11 @@ export async function GET(request) {
       db.query(`
         SELECT q.id, q.status, q.attempts, q.last_error, q.created_at, q.synced_at,
                q.next_attempt_at, q.last_attempt_at,
-               p.full_name, p.linkedin_url,
-               c.company_name
+               pc.full_name, pc.linkedin_url, pc.current_title,
+               cc.company_name
         FROM public.linkedin_sheet_sync_queue q
         LEFT JOIN public.linkedin_profile_captures pc ON pc.id = q.person_capture_id
-        LEFT JOIN public.linkedin_people p ON p.last_capture_id = pc.id
         LEFT JOIN public.linkedin_company_captures cc ON cc.id = q.company_capture_id
-        LEFT JOIN public.linkedin_companies c ON c.last_capture_id = cc.id
         ${where}
         ORDER BY q.created_at DESC
         LIMIT ${limitRef}
