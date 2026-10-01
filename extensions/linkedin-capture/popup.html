@@ -1,41 +1,14 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Pulse LinkedIn Capture</title>
-  <link rel="stylesheet" href="popup.css">
-</head>
-<body>
-  <main class="app">
-    <header><div><div class="eyebrow">PULSE</div><h1>LinkedIn Capture</h1></div><span id="statusDot" class="dot"></span></header>
-    <section class="card">
-      <button id="captureBtn" class="primary">Capturar pessoa + empresa</button>
-      <div id="message" class="message">Abra um perfil /in/ no LinkedIn e clique em capturar.</div>
-    </section>
-    <section id="previewCard" class="card hidden">
-      <strong id="name">—</strong><div id="linkedinUrl" class="small url">—</div><div id="location" class="muted">—</div>
-      <div class="grid">
-        <div><span>Cargo atual</span><b id="currentTitle">—</b></div>
-        <div><span>Empresa atual</span><b id="currentCompany">—</b></div>
-        <div class="full"><span>Capturado em</span><b id="capturedAt">—</b></div>
-      </div>
-      <hr><div class="eyebrow">EMPRESA</div><strong id="companyName">—</strong>
-      <div class="grid">
-        <div class="full"><span>Site</span><b id="companyWebsite">—</b></div>
-        <div class="full"><span>Funcionários</span><b id="employeeCount">—</b></div>
-        <div class="full"><span>Capturado em</span><b id="companyCapturedAt">—</b></div>
-      </div>
-      <div class="muted" id="companyDescription">—</div>
-      <button id="saveBtn" class="primary" disabled>Salvar pessoa + empresa</button>
-      <details><summary>Ver JSON bruto da pessoa</summary><pre id="jsonPreview"></pre></details>
-    </section>
-    <section class="card settings"><details><summary>Configuração da API</summary>
-      <label>Endpoint<input id="apiEndpoint"></label>
-      <label>Token da extensão<input id="apiToken" type="password"></label>
-      <button id="saveSettingsBtn" class="secondary">Salvar configuração</button>
-    </details></section>
-  </main>
-  <script src="popup.js"></script>
-</body>
-</html>
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pulse LinkedIn Capture</title><link rel="stylesheet" href="popup.css"></head><body>
+<main class="app"><header><div><div class="eyebrow">PULSE</div><h1>LinkedIn Capture</h1></div><span id="statusDot" class="dot"></span></header>
+<section id="pairCard" class="card"><div class="eyebrow">SEGURANÇA</div><strong>Parear este Chrome</strong><div class="message">Digite o código de pareamento de uso único. Nenhuma senha permanente fica embutida na extensão.</div><label>Código<input id="pairingCode" autocomplete="off" placeholder="PULSE-XXXXXXXX-XXXXXXXX"></label><label>Nome deste dispositivo<input id="deviceName" value="Chrome principal"></label><button id="pairBtn" class="primary">Parear dispositivo</button></section>
+<section id="deviceCard" class="card hidden"><div class="row"><div><div class="eyebrow">DISPOSITIVO</div><strong id="deviceLabel">Pareado</strong></div><span class="pill">Seguro</span></div><div id="deviceId" class="small mono"></div></section>
+<section class="card"><button id="captureBtn" class="primary">Capturar pessoa + empresa</button><div id="message" class="message">Abra um perfil /in/ no LinkedIn.</div><div id="quality" class="quality hidden"></div></section>
+<section id="previewCard" class="card hidden"><div class="eyebrow">PESSOA</div>
+<label>Nome<input id="fullName"></label><label>URL do LinkedIn<input id="linkedinUrl" readonly></label><label>Localização<input id="location"></label>
+<div class="grid"><label>Cargo atual<input id="currentTitle"></label><label>Empresa atual<input id="currentCompany"></label></div>
+<div class="small" id="capturedAt"></div><details><summary>JSON bruto</summary><pre id="jsonPreview"></pre></details><hr>
+<div class="eyebrow">EMPRESA</div><label>Nome da empresa<input id="companyName"></label><label>Site<input id="companyWebsite"></label><label>Nº / faixa de funcionários<input id="employeeCount"></label><label>Descrição<textarea id="companyDescription" rows="5"></textarea></label><div class="small" id="companyCapturedAt"></div>
+<button id="saveBtn" class="primary">Salvar no Pulse</button></section>
+<section class="card"><div class="row"><strong>Fila local</strong><span id="outboxCount">0</span></div><button id="retryBtn" class="secondary">Reenviar pendências agora</button></section>
+<section class="card settings"><details><summary>Configuração técnica</summary><label>Endpoint<input id="apiEndpoint"></label><button id="saveSettingsBtn" class="secondary">Salvar endpoint</button></details></section>
+</main><script src="popup.js"></script></body></html>

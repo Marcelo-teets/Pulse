@@ -1,0 +1,27 @@
+name: LinkedIn Extension CI
+
+on:
+  pull_request:
+    paths:
+      - "extensions/linkedin-capture/**"
+      - "scripts/validate-linkedin-extension.mjs"
+      - ".github/workflows/linkedin-extension.yml"
+  push:
+    branches: [main]
+    paths:
+      - "extensions/linkedin-capture/**"
+      - "scripts/validate-linkedin-extension.mjs"
+      - ".github/workflows/linkedin-extension.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: node scripts/validate-linkedin-extension.mjs
+      - run: node --check extensions/linkedin-capture/background.js
+      - run: node --check extensions/linkedin-capture/popup.js
+      - run: node --check extensions/linkedin-capture/content.js
