@@ -1,184 +1,145 @@
 (() => {
-  const normalize = (v) => (v || "").replace(/\s+/g, " ").trim();
-  const text = (sel, root = document) => normalize(root.querySelector(sel)?.innerText);
-  const firstText = (sels, root = document) => {
-    for (const sel of sels) {
-      const value = text(sel, root);
-      if (value) return value;
-    }
+  const norm = (v) => String(v || "").replace(/\s+/g, " ").trim();
+  const txt = (el) => norm(el?.innerText || el?.textContent);
+  const one = (selectors, root = document) => {
+    for (const s of selectors) { const el = root.querySelector(s); if (txt(el)) return txt(el); }
     return "";
   };
-  const cleanLines = (value) => [...new Set((value || "").split("\n").map(normalize).filter(Boolean)
-    .filter((line) => !/^(exibir|mostrar|show|ver|see)\b/i.test(line)))];
-
-  const sectionByHeading = (labels) => {
-    const wanted = labels.map((x) => x.toLowerCase());
-    for (const heading of document.querySelectorAll("h2, h3")) {
-      const headingText = normalize(heading.innerText).toLowerCase();
-      if (wanted.some((label) => headingText === label || headingText.startsWith(label))) {
-        return heading.closest("section") || heading.parentElement?.closest("section") || heading.parentElement;
-      }
+  const canonical = () => {
+    try {
+      const u = new URL(document.querySelector('link[rel="canonical"]')?.href || location.href);
+      u.search = ""; u.hash = ""; return u.toString().replace(/\/$/, "");
+    } catch { return location.href; }
+  };
+  const companyUrl = (href) => {
+    try { const u = new URL(href, location.origin); const m = u.pathname.match(/^\/company\/[^/?#]+/i); return m ? `${u.origin}${m[0]}` : ""; } catch { return ""; }
+  };
+  const lines = (el) => [...new Set(String(el?.innerText || "").split("\n").map(norm).filter(Boolean))];
+  const section = (names) => {
+    const labels = names.map((n) => n.toLowerCase());
+    for (const h of document.querySelectorAll("h1,h2,h3")) {
+      const t = txt(h).toLowerCase();
+      if (labels.some((x) => t === x || t.startsWith(x))) return h.closest("section") || h.parentElement?.closest("section") || h.parentElement;
     }
     return null;
   };
 
-  const canonicalUrl = () => {
-    const raw = document.querySelector('link[rel="canonical"]')?.href || location.href;
-    try {
-      const url = new URL(raw);
-      url.search = "";
-      url.hash = "";
-      return url.toString().replace(/\/$/, "");
-    } catch {
-      return raw;
-    }
-  };
-
-  const normalizeCompanyUrl = (href) => {
-    if (!href) return "";
-    try {
-      const url = new URL(href, location.origin);
-      const match = url.pathname.match(/^\/company\/[^/?#]+/i);
-      return match ? `${url.origin}${match[0]}`.replace(/\/$/, "") : "";
-    } catch {
-      return "";
-    }
-  };
-
-  const findCompanyLink = (root) => {
-    for (const link of root.querySelectorAll('a[href*="/company/"]')) {
-      const href = normalizeCompanyUrl(link.href);
-      if (href) return href;
-    }
-    return "";
-  };
-
-  const parseRoleFromHeadline = (headline) => {
-    for (const pattern of [/^(.+?)\s+(?:at|@)\s+(.+)$/i, /^(.+?)\s+(?:na|no|em)\s+(.+)$/i]) {
-      const match = headline.match(pattern);
-      if (match) return { current_title: normalize(match[1]), current_company: normalize(match[2]), company_url: "" };
-    }
-    return { current_title: "", current_company: "", company_url: "" };
-  };
-
-  const parseCurrentRole = (headline) => {
-    const section = sectionByHeading(["Experiência", "Experience"]);
-    if (section) {
-      const items = [...section.querySelectorAll("li")].filter((li) => normalize(li.innerText).length > 5);
-      for (const item of items) {
-        const lines = cleanLines(item.innerText).filter((line) => !/^(experiência|experience)$/i.test(line)).slice(0, 12);
-        if (!lines.length) continue;
-        const looksCurrent = /(presente|present|o momento|atual)/i.test(lines.join(" "));
-        if (!looksCurrent && items.length > 1) continue;
-        const employmentTypeIndex = lines.findIndex((line) =>
-          /\s·\s.*(tempo integral|meio per[ií]odo|aut[oô]nomo|freelance|contrato|est[aá]gio|aprendiz|full[- ]?time|part[- ]?time|self-employed|contract|internship|apprenticeship)/i.test(line));
-        if (employmentTypeIndex >= 1) {
-          return {
-            current_title: lines[employmentTypeIndex - 1] || "",
-            current_company: normalize((lines[employmentTypeIndex] || "").split(" · ")[0]),
-            company_url: findCompanyLink(item)
-          };
-        }
-        const dateLike = /(\b20\d{2}\b|\b19\d{2}\b|presente|present|o momento|atual)/i;
-        if (lines.length >= 2 && !dateLike.test(lines[1])) {
-          return {
-            current_title: lines[0] || "",
-            current_company: normalize((lines[1] || "").split(" · ")[0]),
-            company_url: findCompanyLink(item)
-          };
-        }
+  function currentRole(headline) {
+    const exp = section(["Experiência", "Experience"]);
+    if (exp) {
+      const companyLinks = [...exp.querySelectorAll('a[href*="/company/"]')];
+      for (const link of companyLinks) {
+        const card = link.closest("li") || link.parentElement?.closest("li") || link.parentElement;
+        if (!card) continue;
+        const cardLines = lines(card).slice(0, 16);
+        const body = cardLines.join(" ");
+        const isCurrent = /(presente|present|o momento|atual)/i.test(body);
+        if (!isCurrent && companyLinks.indexOf(link) > 0) continue;
+        const company = txt(link).split(" · ")[0];
+        const likelyTitle = cardLines.find((x) => x !== company && !/(presente|present|\b20\d{2}\b|tempo integral|full[- ]?time|localidade|location)/i.test(x)) || "";
+        if (company) return { current_title: likelyTitle, current_company: company, company_url: companyUrl(link.href) };
       }
     }
-    const fallback = parseRoleFromHeadline(headline);
-    fallback.company_url = findCompanyLink(document.querySelector("main") || document);
-    return fallback;
-  };
+    const patterns = [/^(.+?)\s+(?:at|@)\s+(.+)$/i, /^(.+?)\s+(?:na|no|em)\s+(.+)$/i];
+    for (const p of patterns) {
+      const m = headline.match(p); if (m) return { current_title: norm(m[1]), current_company: norm(m[2]), company_url: "" };
+    }
+    const link = document.querySelector('main a[href*="/company/"]');
+    return { current_title: headline, current_company: txt(link), company_url: companyUrl(link?.href) };
+  }
 
-  const extractProfile = () => {
-    const root = document.querySelector("main section") || document.querySelector("main") || document;
-    const headline = firstText([".text-body-medium.break-words","div.text-body-medium","main section div.text-body-medium"], root);
-    const role = parseCurrentRole(headline);
-    const capture = {
-      full_name: firstText(["h1"], root) || firstText(["h1"]),
-      linkedin_url: canonicalUrl(),
-      location: firstText([".text-body-small.inline.t-black--light.break-words","span.text-body-small.inline","main section span.text-body-small"], root),
-      current_title: role.current_title,
-      current_company: role.current_company,
-      captured_at: new Date().toISOString()
-    };
-    return { ...capture, raw_json: { ...capture }, _company_url: role.company_url || "" };
-  };
+  function extractProfile() {
+    const main = document.querySelector("main") || document;
+    const full_name = one(["h1"], main) || one(["h1"]);
+    const location = one([
+      ".text-body-small.inline.t-black--light.break-words",
+      "span.text-body-small.inline",
+      "main section span.text-body-small",
+      '[data-view-name="profile-card"] .text-body-small'
+    ], main);
+    const headline = one([".text-body-medium.break-words", "div.text-body-medium", "main section div.text-body-medium"], main);
+    const role = currentRole(headline);
+    const captured_at = new Date().toISOString();
+    const base = { full_name, linkedin_url: canonical(), location, current_title: role.current_title, current_company: role.current_company, captured_at };
+    return { ...base, raw_json: { ...base }, _company_url: role.company_url };
+  }
 
-  const companyLabelValue = (labels) => {
+  function jsonLdOrganization() {
+    for (const el of document.querySelectorAll('script[type="application/ld+json"]')) {
+      try {
+        const data = JSON.parse(el.textContent || "null");
+        const candidates = Array.isArray(data) ? data : data?.['@graph'] || [data];
+        for (const x of candidates) {
+          if (x && /Organization|Corporation/i.test(String(x['@type'] || ""))) return x;
+        }
+      } catch {}
+    }
+    return null;
+  }
+
+  function labelValue(labels) {
     const wanted = labels.map((x) => x.toLowerCase());
-    for (const el of document.querySelectorAll("dt, h3, span, div")) {
-      const label = normalize(el.innerText).toLowerCase();
-      if (!wanted.some((w) => label === w)) continue;
+    for (const el of document.querySelectorAll("dt,h3,span,div")) {
+      if (!wanted.includes(txt(el).toLowerCase())) continue;
       const parent = el.parentElement;
-      if (!parent) continue;
-      const siblingText = normalize(el.nextElementSibling?.innerText);
-      if (siblingText) return { text: siblingText, root: parent };
-      const lines = cleanLines(parent.innerText).filter((x) => !wanted.includes(x.toLowerCase()));
-      if (lines[0]) return { text: lines[0], root: parent };
+      const sibling = el.nextElementSibling;
+      if (txt(sibling)) return { value: txt(sibling), root: parent };
+      const rest = lines(parent).filter((x) => !wanted.includes(x.toLowerCase()));
+      if (rest[0]) return { value: rest[0], root: parent };
     }
-    return { text: "", root: null };
-  };
+    return { value: "", root: null };
+  }
 
-  const extractWebsite = () => {
-    const labeled = companyLabelValue(["Website", "Site"]);
-    if (labeled.root) {
-      const link = labeled.root.querySelector('a[href^="http"]');
-      if (link?.href && !/linkedin\.com/i.test(link.href)) return link.href;
-    }
+  function website(ld) {
+    if (ld?.url && !/linkedin\.com/i.test(ld.url)) return String(ld.url);
+    const lab = labelValue(["Website", "Site"]);
+    const link = lab.root?.querySelector('a[href^="http"]');
+    if (link?.href && !/linkedin\.com/i.test(link.href)) return link.href;
     for (const a of document.querySelectorAll('a[href^="http"]')) {
-      if (!/linkedin\.com/i.test(a.href) && /(website|site|visitar|visit)/i.test(normalize(a.innerText))) return a.href;
+      if (!/linkedin\.com/i.test(a.href) && /(website|site|visitar|visit)/i.test(txt(a))) return a.href;
     }
-    return labeled.text && /^https?:\/\//i.test(labeled.text) ? labeled.text : "";
-  };
+    return /^https?:\/\//i.test(lab.value) ? lab.value : "";
+  }
 
-  const extractEmployeeCount = () => {
-    const labeled = companyLabelValue(["Company size", "Tamanho da empresa"]);
-    if (labeled.text) return labeled.text;
-    const body = normalize(document.body?.innerText);
-    for (const pattern of [
+  function employeeCount() {
+    const lab = labelValue(["Company size", "Tamanho da empresa"]);
+    if (lab.value) return lab.value;
+    const body = txt(document.body);
+    for (const re of [
       /([\d.,]+\s*[–-]\s*[\d.,]+\s+(?:employees|funcionários))/i,
       /([\d.,]+\+\s+(?:employees|funcionários))/i,
       /([\d.,]+\s+(?:associated members|funcionários associados))/i
-    ]) {
-      const match = body.match(pattern);
-      if (match) return normalize(match[1]);
-    }
+    ]) { const m = body.match(re); if (m) return norm(m[1]); }
     return "";
-  };
+  }
 
-  const extractCompanyDescription = () => {
-    const about = sectionByHeading(["Sobre","About","Visão geral","Overview"]);
+  function description(ld) {
+    if (norm(ld?.description).length >= 40) return norm(ld.description);
+    const about = section(["Sobre", "About", "Visão geral", "Overview"]);
     if (about) {
-      const paragraphs = [...about.querySelectorAll("p, div.break-words, span.break-words")]
-        .map((el) => normalize(el.innerText)).filter((v) => v.length >= 40);
-      if (paragraphs[0]) return paragraphs[0];
+      const vals = [...about.querySelectorAll("p,div.break-words,span.break-words")].map(txt).filter((v) => v.length >= 40);
+      if (vals[0]) return vals[0];
     }
-    return [...document.querySelectorAll("main p, main div.break-words")]
-      .map((el) => normalize(el.innerText))
-      .find((v) => v.length >= 80 && !/(followers|seguidores|employees|funcionários)/i.test(v)) || "";
-  };
+    return [...document.querySelectorAll("main p,main div.break-words")].map(txt).find((v) => v.length >= 80 && !/(followers|seguidores|employees|funcionários)/i.test(v)) || "";
+  }
 
-  const extractCompany = () => ({
-    company_name: firstText(["h1","main h1",".org-top-card-summary__title"]),
-    description: extractCompanyDescription(),
-    website: extractWebsite(),
-    employee_count: extractEmployeeCount(),
-    captured_at: new Date().toISOString()
-  });
+  function extractCompany() {
+    const ld = jsonLdOrganization();
+    return {
+      company_name: norm(ld?.name) || one(["h1","main h1",".org-top-card-summary__title"]),
+      description: description(ld),
+      website: website(ld),
+      employee_count: employeeCount(),
+      captured_at: new Date().toISOString()
+    };
+  }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     try {
       if (message?.type === "EXTRACT_PROFILE") sendResponse({ ok: true, profile: extractProfile() });
       else if (message?.type === "EXTRACT_COMPANY") sendResponse({ ok: true, company: extractCompany() });
-      else return;
-    } catch (error) {
-      sendResponse({ ok: false, error: error?.message || "Falha ao extrair dados do LinkedIn" });
-    }
+      else return false;
+    } catch (e) { sendResponse({ ok: false, error: e?.message || "Falha ao extrair dados." }); }
     return true;
   });
 })();
