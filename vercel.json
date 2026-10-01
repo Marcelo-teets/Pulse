@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/internal/sheets-sync",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
