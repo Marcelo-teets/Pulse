@@ -576,7 +576,7 @@ td small { display: block; margin-top: 4px; color: #61758c; }
     border-top: 1px solid var(--line);
   }
   .brand, .sidebar-footer { display: none; }
-  .sidebar nav { grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .sidebar nav { grid-template-columns: repeat(5, 1fr); gap: 4px; }
   .nav-item, .nav-item.active { justify-content: center; background: transparent; border-color: transparent; }
   .workspace { padding-bottom: 66px; }
   .topbar { height: 72px; padding: 0 18px; }
