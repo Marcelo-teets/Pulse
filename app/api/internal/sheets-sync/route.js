@@ -230,12 +230,14 @@ export async function GET(request) {
       const url = String(row?.[2] || "").trim().replace(/\/$/, "");
       if (url) personRowByUrl.set(url, index + 2);
     });
+    let nextPersonRow = peopleRows.length + 2;
 
     const companyRowByKey = new Map();
     companyRows.forEach((row, index) => {
       const key = normalizeCompanyKey(row?.[2], row?.[4]);
       if (key !== "|") companyRowByKey.set(key, index + 2);
     });
+    let nextCompanyRow = companyRows.length + 2;
 
     const captureRows = [];
     const syncedIds = [];
@@ -278,7 +280,7 @@ export async function GET(request) {
         await updateValues(token, `Pessoas!A${existingPersonRow}:H${existingPersonRow}`, personValues);
       } else {
         await appendValues(token, "Pessoas!A:H", personValues);
-        personRowByUrl.set(personUrl, peopleRows.length + personRowByUrl.size + 2);
+        personRowByUrl.set(personUrl, nextPersonRow++);
       }
 
       const companyValues = [[
@@ -295,7 +297,7 @@ export async function GET(request) {
         await updateValues(token, `Empresas!A${existingCompanyRow}:G${existingCompanyRow}`, companyValues);
       } else {
         await appendValues(token, "Empresas!A:G", companyValues);
-        companyRowByKey.set(companyKey, companyRows.length + companyRowByKey.size + 2);
+        companyRowByKey.set(companyKey, nextCompanyRow++);
       }
 
       syncedIds.push(item.sync_id);
