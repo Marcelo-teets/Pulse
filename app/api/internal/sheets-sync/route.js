@@ -1,3 +1,4 @@
+// Pulse Sheets sync worker — production
 import { createSign } from "node:crypto";
 import pg from "pg";
 
