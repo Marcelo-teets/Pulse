@@ -686,3 +686,40 @@ td small { display: block; margin-top: 4px; color: #61758c; }
   .people-toolbar, .sync-toolbar { align-items: stretch; }
   .segmented-control { overflow-x: auto; flex-wrap: nowrap; }
 }
+
+
+.center-state {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.state-card {
+  width: min(520px, 100%);
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.state-card .brand-mark { margin-bottom: 22px; }
+.state-card h1 { margin: 0; font-size: 28px; letter-spacing: -.03em; }
+.state-card > p:last-of-type { color: var(--muted); line-height: 1.65; }
+.state-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+
+.skeleton-card { overflow: hidden; }
+.skeleton-line {
+  display: block;
+  height: 9px;
+  margin-top: 11px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(148,163,184,.08), rgba(148,163,184,.16), rgba(148,163,184,.08));
+  background-size: 220% 100%;
+  animation: pulse-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-line.short { width: 38%; margin-top: 0; }
+.skeleton-line.value { width: 58%; height: 26px; margin-top: 18px; }
+@keyframes pulse-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -120% 0; }
+}
