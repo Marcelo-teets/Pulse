@@ -597,3 +597,92 @@ td small { display: block; margin-top: 4px; color: #61758c; }
   .architecture-nodes i { width: 30px; height: 30px; }
   .sync-numbers { width: 100%; }
 }
+
+
+.section-intro {
+  min-height: 150px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 26px 4px 24px;
+}
+.section-intro h2 {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 38px);
+  letter-spacing: -.03em;
+  font-weight: 650;
+}
+.section-intro > div > p:last-child {
+  max-width: 720px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.big-counter {
+  min-width: 140px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.018);
+  text-align: right;
+}
+.big-counter span {
+  display: block;
+  color: var(--muted-2);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+.big-counter strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 27px;
+  font-variant-numeric: tabular-nums;
+}
+.search-box.wide { width: min(440px, 52%); }
+.people-toolbar { align-items: center; }
+.table-link { color: #9edcf5; }
+.table-link:hover { color: #dff7ff; }
+.sync-metrics { margin-top: 0; margin-bottom: 14px; }
+.sync-table-panel { margin-top: 0; }
+.sync-toolbar { min-height: 76px; }
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0,0,0,.10);
+}
+.segmented-control button {
+  min-height: 29px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #6f849b;
+  font-size: 9px;
+  cursor: pointer;
+}
+.segmented-control button:hover { color: #c8d6e4; }
+.segmented-control button.active {
+  background: rgba(56,189,248,.10);
+  color: #ccefff;
+}
+.error-text {
+  max-width: 280px;
+  color: #fb9eac !important;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  .section-intro { align-items: flex-start; flex-direction: column; }
+  .big-counter { width: 100%; text-align: left; }
+  .search-box.wide { width: 100%; }
+  .people-toolbar, .sync-toolbar { align-items: stretch; }
+  .segmented-control { overflow-x: auto; flex-wrap: nowrap; }
+}
