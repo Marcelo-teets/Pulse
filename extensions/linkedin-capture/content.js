@@ -57,14 +57,15 @@
       const startsAsOtherSection = /^(?:Sobre|About|Atividades|Activity|Experiência|Experience|Formação acadêmica|Education|Licenças|Licenses)\b/i.test(rows[0] || "");
       if (startsAsOtherSection) return -100;
 
-      let points = Math.max(0, 4 - Math.min(index, 4));
+      let points = Math.max(0, 2 - Math.min(index, 2));
+      let evidence = 0;
       const directName = one([".text-heading-xlarge", ".pv-text-details__left-panel h1", "h1", "[data-anonymize='person-name']"], el);
-      if (directName && validName(cleanName(directName))) points += 6;
-      if (expected && content.includes(expected)) points += 8;
-      if (el.querySelector('img[alt*="Foto do perfil"],img[alt*="profile photo"]')) points += 3;
-      if (/(?:Dados de contato|Contact info|conexões|connections)/i.test(content)) points += 3;
-      if (el.querySelector('a[href*="/company/"]')) points += 2;
-      return points;
+      if (directName && validName(cleanName(directName))) { points += 6; evidence += 1; }
+      if (expected && content.includes(expected)) { points += 8; evidence += 1; }
+      if (el.querySelector('img[alt*="Foto do perfil"],img[alt*="profile photo"]')) { points += 3; evidence += 1; }
+      if (/(?:Dados de contato|Contact info|conexões|connections)/i.test(content)) { points += 3; evidence += 1; }
+      if (el.querySelector('a[href*="/company/"]')) { points += 2; evidence += 1; }
+      return evidence >= 2 ? points : -100;
     };
 
     let best = null;
