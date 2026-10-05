@@ -1,23 +1,12 @@
-import pg from "pg";
+import { getPool } from "../../../lib/db";
+import { requireUser } from "../../../lib/auth";
 
 export const dynamic = "force-dynamic";
-const { Pool } = pg;
-let pool;
-
-function getPool() {
-  if (!process.env.DATABASE_URL) return null;
-  if (!pool) {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 1,
-      idleTimeoutMillis: 10000,
-      connectionTimeoutMillis: 5000,
-    });
-  }
-  return pool;
-}
 
 export async function GET() {
+  const { user, response } = await requireUser();
+  if (response) return response;
+  if (user.role !== "master") return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   const generatedAt = new Date().toISOString();
   const db = getPool();
 

@@ -1,16 +1,11 @@
-import pg from "pg";
+import { getPool } from "../../../lib/db";
+import { requireUser } from "../../../lib/auth";
 
 export const dynamic = "force-dynamic";
-const { Pool } = pg;
-let pool;
-
-function getPool() {
-  if (!process.env.DATABASE_URL) return null;
-  if (!pool) pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, idleTimeoutMillis: 10000, connectionTimeoutMillis: 5000 });
-  return pool;
-}
 
 export async function GET(request) {
+  const { user, response } = await requireUser();
+  if (response) return response;
   const db = getPool();
   const { searchParams } = new URL(request.url);
   const status = (searchParams.get("status") || "all").trim();
@@ -27,11 +22,16 @@ export async function GET(request) {
 
   try {
     const values = [];
-    let where = "";
+    const conditions = [];
     if (["pending", "processing", "synced", "error"].includes(status)) {
       values.push(status);
-      where = "WHERE q.status = $1";
+      conditions.push(`q.status = $1`);
     }
+    if (user.role !== "master") {
+      values.push(user.id);
+      conditions.push(`pc.owner_user_id = $${values.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     values.push(limit);
     const limitRef = "$" + values.length;
 
@@ -55,8 +55,10 @@ export async function GET(request) {
           count(*) FILTER (WHERE status = 'processing')::int AS processing,
           count(*) FILTER (WHERE status = 'synced')::int AS synced,
           count(*) FILTER (WHERE status = 'error')::int AS error
-        FROM public.linkedin_sheet_sync_queue
-      `),
+        FROM public.linkedin_sheet_sync_queue q
+        LEFT JOIN public.linkedin_profile_captures pc ON pc.id = q.person_capture_id
+        ${user.role !== "master" ? "WHERE pc.owner_user_id = $1" : ""}
+      `, user.role !== "master" ? [user.id] : []),
     ]);
 
     return Response.json({ connected: true, items: items.rows, stats: stats.rows[0] });

@@ -8,6 +8,8 @@ const navItems = [
   ["Empresas", "▦", "/empresas"],
   ["Sincronização", "↻", "/sincronizacao"],
   ["Operação", "◫", "/operacao"],
+  ["Configuração", "⚙", "/configuracao"],
+  ["Usuários", "◇", "/usuarios", "master"],
 ];
 
 function formatDate(value) {
@@ -53,6 +55,7 @@ export default function Home() {
   const [active, setActive] = useState("Visão geral");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
   async function refresh() {
     setLoading(true);
@@ -75,6 +78,10 @@ export default function Home() {
   }
 
   useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => setUser(payload.user || null))
+      .catch(() => setUser(null));
     refresh();
     const timer = setInterval(refresh, 30000);
     return () => clearInterval(timer);
@@ -95,6 +102,11 @@ export default function Home() {
 
   const stats = data?.stats || {};
 
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/auth";
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -107,7 +119,7 @@ export default function Home() {
         </div>
 
         <nav>
-          {navItems.map(([label, icon, href]) => (
+          {navItems.filter((item) => !item[3] || user?.role === item[3]).map(([label, icon, href]) => (
             <a
               key={label}
               href={href}
@@ -124,10 +136,11 @@ export default function Home() {
           <div className="infra-badge">
             <span className="pulse-dot" />
             <div>
-              <b>Infra online</b>
-              <small>Vercel + Neon</small>
+              <b>{user?.fullName || "Infra online"}</b>
+              <small>{user?.role === "master" ? "master user" : user?.email || "Vercel + Neon"}</small>
             </div>
           </div>
+          <button className="logout-button" onClick={logout}>Sair</button>
           <small>Pulse · produção</small>
         </div>
       </aside>

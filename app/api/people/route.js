@@ -1,16 +1,11 @@
-import pg from "pg";
+import { getPool } from "../../../lib/db";
+import { requireUser } from "../../../lib/auth";
 
 export const dynamic = "force-dynamic";
-const { Pool } = pg;
-let pool;
-
-function getPool() {
-  if (!process.env.DATABASE_URL) return null;
-  if (!pool) pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, idleTimeoutMillis: 10000, connectionTimeoutMillis: 5000 });
-  return pool;
-}
 
 export async function GET(request) {
+  const { user, response } = await requireUser();
+  if (response) return response;
   const db = getPool();
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") || "").trim();
@@ -20,11 +15,16 @@ export async function GET(request) {
 
   try {
     const params = [];
-    let where = "";
+    const conditions = [];
     if (q) {
       params.push("%" + q + "%");
-      where = `WHERE p.full_name ILIKE $1 OR p.current_title ILIKE $1 OR p.current_company ILIKE $1 OR p.location ILIKE $1 OR c.company_name ILIKE $1`;
+      conditions.push(`(p.full_name ILIKE $1 OR p.current_title ILIKE $1 OR p.current_company ILIKE $1 OR p.location ILIKE $1 OR c.company_name ILIKE $1)`);
     }
+    if (user.role !== "master") {
+      params.push(user.id);
+      conditions.push(`p.owner_user_id = $${params.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     params.push(limit);
     const limitRef = "$" + params.length;
 
@@ -45,7 +45,7 @@ export async function GET(request) {
         LEFT JOIN public.linkedin_current_roles r ON r.person_id = p.id
         LEFT JOIN public.linkedin_companies c ON c.id = r.company_id
         ${where}
-      `, q ? [params[0]] : []),
+      `, params.slice(0, -1)),
     ]);
 
     return Response.json({ connected: true, items: items.rows, total: total.rows[0]?.total || 0 });

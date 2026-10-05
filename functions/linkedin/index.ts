@@ -68,8 +68,8 @@ async function authenticate(request: Request) {
   const deviceToken = clean(request.headers.get("x-pulse-device-token"), 500);
 
   if (deviceToken) {
-    const rows = await q<{ device_id: string }>(
-      "SELECT device_id FROM public.linkedin_devices WHERE token_hash=$1 AND revoked_at IS NULL AND (token_expires_at IS NULL OR token_expires_at>NOW()) LIMIT 1",
+    const rows = await q<{ device_id: string; owner_user_id: string | null }>(
+      "SELECT device_id, owner_user_id::text FROM public.linkedin_devices WHERE token_hash=$1 AND revoked_at IS NULL AND (token_expires_at IS NULL OR token_expires_at>NOW()) LIMIT 1",
       [sha(deviceToken)]
     );
     if (rows.length) {
@@ -77,16 +77,16 @@ async function authenticate(request: Request) {
         "UPDATE public.linkedin_devices SET last_seen_at=NOW(), extension_version=COALESCE($2,extension_version) WHERE device_id=$1",
         [rows[0].device_id, extensionVersion]
       );
-      return { ok: true, deviceId: rows[0].device_id, mode: "device", extensionVersion };
+      return { ok: true, deviceId: rows[0].device_id, ownerUserId: rows[0].owner_user_id, mode: "device", extensionVersion };
     }
   }
 
   const legacy = clean(request.headers.get("x-extension-token"), 500);
   if (legacy && Date.now() <= LEGACY_UNTIL && LEGACY_TOKENS.includes(legacy)) {
-    return { ok: true, deviceId: "legacy-v06", mode: "legacy", extensionVersion };
+    return { ok: true, deviceId: "legacy-v06", ownerUserId: null, mode: "legacy", extensionVersion };
   }
 
-  return { ok: false, deviceId: null, mode: null, extensionVersion };
+  return { ok: false, deviceId: null, ownerUserId: null, mode: null, extensionVersion };
 }
 
 function normalizeLinkedinUrl(value: unknown) {
@@ -172,7 +172,7 @@ async function findExisting(requestId: string) {
   };
 }
 
-async function persist(requestId: string, person: any, company: any) {
+async function persist(requestId: string, person: any, company: any, ownerUserId: string | null) {
   const existing = await findExisting(requestId);
   if (existing) return existing;
 
@@ -181,7 +181,7 @@ async function persist(requestId: string, person: any, company: any) {
     await client.query("BEGIN");
 
     const personCapture = await q<{ id: string }>(
-      "INSERT INTO public.linkedin_profile_captures(request_id,full_name,linkedin_url,location,current_title,current_company,captured_at,raw_json) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz,$8::jsonb) RETURNING id::text",
+      "INSERT INTO public.linkedin_profile_captures(request_id,full_name,linkedin_url,location,current_title,current_company,captured_at,raw_json,owner_user_id) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz,$8::jsonb,$9::bigint) RETURNING id::text",
       [
         requestId,
         person.full_name,
@@ -191,13 +191,14 @@ async function persist(requestId: string, person: any, company: any) {
         person.current_company,
         person.captured_at,
         JSON.stringify(person.raw_json),
+        ownerUserId,
       ],
       client
     );
     const personCaptureId = personCapture[0].id;
 
     const companyCapture = await q<{ id: string }>(
-      "INSERT INTO public.linkedin_company_captures(request_id,person_capture_id,company_name,description,website,employee_count,captured_at) VALUES($1,$2::bigint,$3,$4,$5,$6,$7::timestamptz) RETURNING id::text",
+      "INSERT INTO public.linkedin_company_captures(request_id,person_capture_id,company_name,description,website,employee_count,captured_at,owner_user_id) VALUES($1,$2::bigint,$3,$4,$5,$6,$7::timestamptz,$8::bigint) RETURNING id::text",
       [
         requestId,
         personCaptureId,
@@ -206,13 +207,14 @@ async function persist(requestId: string, person: any, company: any) {
         company.website,
         company.employee_count,
         company.captured_at,
+        ownerUserId,
       ],
       client
     );
     const companyCaptureId = companyCapture[0].id;
 
     const canonicalPerson = await q<{ id: string }>(
-      "INSERT INTO public.linkedin_people(linkedin_url,full_name,location,current_title,current_company,first_seen_at,last_seen_at,last_capture_id) VALUES($1,$2,$3,$4,$5,$6::timestamptz,$6::timestamptz,$7::bigint) ON CONFLICT(linkedin_url) DO UPDATE SET full_name=EXCLUDED.full_name,location=EXCLUDED.location,current_title=EXCLUDED.current_title,current_company=EXCLUDED.current_company,last_seen_at=GREATEST(public.linkedin_people.last_seen_at,EXCLUDED.last_seen_at),last_capture_id=EXCLUDED.last_capture_id RETURNING id::text",
+      "INSERT INTO public.linkedin_people(linkedin_url,full_name,location,current_title,current_company,first_seen_at,last_seen_at,last_capture_id,owner_user_id) VALUES($1,$2,$3,$4,$5,$6::timestamptz,$6::timestamptz,$7::bigint,$8::bigint) ON CONFLICT(linkedin_url) DO UPDATE SET full_name=EXCLUDED.full_name,location=EXCLUDED.location,current_title=EXCLUDED.current_title,current_company=EXCLUDED.current_company,last_seen_at=GREATEST(public.linkedin_people.last_seen_at,EXCLUDED.last_seen_at),last_capture_id=EXCLUDED.last_capture_id,owner_user_id=COALESCE(public.linkedin_people.owner_user_id, EXCLUDED.owner_user_id) RETURNING id::text",
       [
         person.linkedin_url,
         person.full_name,
@@ -221,12 +223,13 @@ async function persist(requestId: string, person: any, company: any) {
         person.current_company,
         person.captured_at,
         personCaptureId,
+        ownerUserId,
       ],
       client
     );
 
     const canonicalCompany = await q<{ id: string }>(
-      "INSERT INTO public.linkedin_companies(company_key,company_name,description,website,employee_count,first_seen_at,last_seen_at,last_capture_id) VALUES($1,$2,$3,$4,$5,$6::timestamptz,$6::timestamptz,$7::bigint) ON CONFLICT(company_key) DO UPDATE SET company_name=EXCLUDED.company_name,description=COALESCE(EXCLUDED.description,public.linkedin_companies.description),website=COALESCE(EXCLUDED.website,public.linkedin_companies.website),employee_count=COALESCE(EXCLUDED.employee_count,public.linkedin_companies.employee_count),last_seen_at=GREATEST(public.linkedin_companies.last_seen_at,EXCLUDED.last_seen_at),last_capture_id=EXCLUDED.last_capture_id RETURNING id::text",
+      "INSERT INTO public.linkedin_companies(company_key,company_name,description,website,employee_count,first_seen_at,last_seen_at,last_capture_id,owner_user_id) VALUES($1,$2,$3,$4,$5,$6::timestamptz,$6::timestamptz,$7::bigint,$8::bigint) ON CONFLICT(company_key) DO UPDATE SET company_name=EXCLUDED.company_name,description=COALESCE(EXCLUDED.description,public.linkedin_companies.description),website=COALESCE(EXCLUDED.website,public.linkedin_companies.website),employee_count=COALESCE(EXCLUDED.employee_count,public.linkedin_companies.employee_count),last_seen_at=GREATEST(public.linkedin_companies.last_seen_at,EXCLUDED.last_seen_at),last_capture_id=EXCLUDED.last_capture_id,owner_user_id=COALESCE(public.linkedin_companies.owner_user_id, EXCLUDED.owner_user_id) RETURNING id::text",
       [
         companyKey(company),
         company.company_name,
@@ -235,6 +238,7 @@ async function persist(requestId: string, person: any, company: any) {
         company.employee_count,
         company.captured_at,
         companyCaptureId,
+        ownerUserId,
       ],
       client
     );
@@ -299,8 +303,8 @@ export default {
 
         try {
           await client.query("BEGIN");
-          const valid = await q(
-            "SELECT code_hash FROM public.linkedin_pairing_codes WHERE code_hash=$1 AND used_at IS NULL AND expires_at>NOW() FOR UPDATE",
+          const valid = await q<{ owner_user_id: string | null }>(
+            "SELECT owner_user_id::text FROM public.linkedin_pairing_codes WHERE code_hash=$1 AND used_at IS NULL AND expires_at>NOW() FOR UPDATE",
             [sha(code)],
             client
           );
@@ -316,8 +320,8 @@ export default {
           }
 
           await q(
-            "INSERT INTO public.linkedin_devices(device_id,device_name,token_hash,created_at,last_seen_at,extension_version,token_expires_at) VALUES($1,$2,$3,NOW(),NOW(),$4,NOW()+INTERVAL '90 days')",
-            [deviceId, deviceName, sha(token), extensionVersion],
+            "INSERT INTO public.linkedin_devices(device_id,device_name,token_hash,created_at,last_seen_at,extension_version,token_expires_at,owner_user_id) VALUES($1,$2,$3,NOW(),NOW(),$4,NOW()+INTERVAL '90 days',$5::bigint)",
+            [deviceId, deviceName, sha(token), extensionVersion, valid[0].owner_user_id],
             client
           );
           await q(
@@ -395,7 +399,7 @@ export default {
         return json({ error: error.message || "Payload inválido" }, 400);
       }
 
-      const result = await persist(requestId, person, company);
+      const result = await persist(requestId, person, company, auth.ownerUserId);
       const meta = body?.meta && typeof body.meta === "object" ? body.meta : {};
 
       await audit("capture_saved", {

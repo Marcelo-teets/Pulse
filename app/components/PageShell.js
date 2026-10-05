@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const navItems = [
   ["Visão geral", "⌁", "/"],
@@ -8,10 +9,25 @@ const navItems = [
   ["Empresas", "▦", "/empresas"],
   ["Sincronização", "↻", "/sincronizacao"],
   ["Operação", "◫", "/operacao"],
+  ["Configuração", "⚙", "/configuracao"],
+  ["Usuários", "◇", "/usuarios", "master"],
 ];
 
 export default function PageShell({ title, eyebrow = "PULSE CONTROL CENTER", actions, children }) {
   const pathname = usePathname();
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => setUser(payload.user || null))
+      .catch(() => setUser(null));
+  }, []);
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/auth";
+  }
 
   return (
     <main className="app-shell">
@@ -25,7 +41,7 @@ export default function PageShell({ title, eyebrow = "PULSE CONTROL CENTER", act
         </div>
 
         <nav>
-          {navItems.map(([label, icon, href]) => (
+          {navItems.filter((item) => !item[3] || user?.role === item[3]).map(([label, icon, href]) => (
             <a
               key={href}
               href={href}
@@ -41,10 +57,11 @@ export default function PageShell({ title, eyebrow = "PULSE CONTROL CENTER", act
           <div className="infra-badge">
             <span className="pulse-dot" />
             <div>
-              <b>Infra online</b>
-              <small>Vercel + Neon</small>
+              <b>{user?.fullName || "Pulse"}</b>
+              <small>{user?.role === "master" ? "master user" : user?.email || "Vercel + Neon"}</small>
             </div>
           </div>
+          <button className="logout-button" onClick={logout}>Sair</button>
           <small>Pulse · produção</small>
         </div>
       </aside>
