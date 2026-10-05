@@ -1,4 +1,5 @@
 // Pulse Sheets sync worker — production
+const LINKEDIN_API_VERSION = "0.7.0";
 import { createSign } from "node:crypto";
 import pg from "pg";
 
@@ -191,10 +192,11 @@ async function updateOperationalMetrics(database, token) {
       (SELECT count(*)::int FROM public.linkedin_companies WHERE employee_count IS NOT NULL AND employee_count<>'') AS with_employees,
       (SELECT count(*)::int FROM public.linkedin_sheet_sync_queue WHERE status IN ('pending','processing','error')) AS backlog,
       (SELECT count(*)::int FROM public.linkedin_devices WHERE revoked_at IS NULL AND (token_expires_at IS NULL OR token_expires_at>NOW())) AS active_devices,
-      (SELECT count(*)::int FROM public.linkedin_profile_captures WHERE captured_at>=NOW()-INTERVAL '24 hours') AS captures_24h
+      (SELECT count(*)::int FROM public.linkedin_profile_captures WHERE captured_at>=NOW()-INTERVAL '24 hours') AS captures_24h,
+      (SELECT count(*)::int FROM public.linkedin_api_audit WHERE success = FALSE AND created_at>=NOW()-INTERVAL '24 hours') AS api_failures_24h
   `);
   const m = result.rows[0] || {};
-  await updateValues(token, "Operação!B2:B10", [[m.synced || 0],[m.people || 0],[m.companies || 0],[m.last_capture ? new Date(m.last_capture).toISOString() : ""],[m.with_site || 0],[m.with_employees || 0],[m.backlog || 0],[m.active_devices || 0],[m.captures_24h || 0]]);
+  await updateValues(token, "Operação!B2:B12", [[m.synced || 0],[m.people || 0],[m.companies || 0],[m.last_capture ? new Date(m.last_capture).toISOString() : ""],[m.with_site || 0],[m.with_employees || 0],[m.backlog || 0],[m.active_devices || 0],[m.captures_24h || 0],[m.api_failures_24h || 0],[LINKEDIN_API_VERSION]]);
 }
 
 export async function GET(request) {
