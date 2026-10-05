@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: pulse-full-qa-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -23,7 +27,6 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Dependency vulnerability audit
         run: npm audit --omit=dev --audit-level=high
-
       - name: Structural QA
         run: node scripts/qa-full.mjs
       - name: Extension validation
@@ -35,7 +38,6 @@ jobs:
           node --check extensions/linkedin-capture/popup.js
       - name: LinkedIn extractor regressions
         run: node scripts/test-linkedin-extractor.mjs
-
       - name: Authentication unit tests
         run: node scripts/test-auth.mjs
       - name: Next.js production build
