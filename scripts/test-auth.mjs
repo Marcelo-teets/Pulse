@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { hashPassword, normalizeEmail, safeUser, verifyPassword } from "../lib/auth.js";
+import { hashPassword, normalizeEmail, safeUser, verifyPassword } from "../lib/auth-core.js";
 
 assert.equal(normalizeEmail("  Test@Example.COM "), "test@example.com");
 assert.equal(normalizeEmail(null), "");
