@@ -134,11 +134,11 @@ try {
 
   await db.query(`
     INSERT INTO public.linkedin_devices(device_id,device_name,token_hash,extension_version,owner_user_id,token_expires_at)
-    VALUES ('qa-device','QA Chrome','qa-hash','0.8.3',$1,NOW()+INTERVAL '90 days')
+    VALUES ('qa-device','QA Chrome','qa-hash','0.8.4',$1,NOW()+INTERVAL '90 days')
   `, [u1]);
   await db.query(`
     INSERT INTO public.linkedin_api_audit(event_type,device_id,request_id,extension_version,success,http_status,details)
-    VALUES ('capture_saved','qa-device','00000000-0000-4000-8000-000000000001','0.8.3',true,201,'{"quality_score":100}')
+    VALUES ('capture_saved','qa-device','00000000-0000-4000-8000-000000000001','0.8.4',true,201,'{"quality_score":100}')
   `);
 
   const deviceView = await db.query("SELECT status,owner_user_id FROM public.linkedin_device_status WHERE device_id='qa-device'");
