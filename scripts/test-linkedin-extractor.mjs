@@ -41,7 +41,7 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
     ...includeContact ? [tagged("span", "Dados de contato")] : [],
     ...omitCompany ? [] : [tagged("a", `Ver empresa: ${company}`, [], {href:`https://www.linkedin.com/company/${slug}/`})]
   ]);
-  header.innerText = `${name}\n${title}\n${place}\n${modern ? "Dados de contato\n" : ""}${omitCompany ? "" : company}`;
+  header.innerText = `${name}\n${title}\n${place}\n${includeContact ? "Dados de contato\n" : ""}${omitCompany ? "" : company}`;
   const activity = tagged("section", "Atividades", [tagged("a", unrelated, [], {href:"https://www.linkedin.com/company/unrelated/"})]);
   const noise = tagged("section", "Experimente o Premium por 30 dias", [tagged("div", "Tenha acesso a recursos exclusivos")]);
   const main = tagged("main", "", [...prependNoise ? [noise] : [], header, activity]);
