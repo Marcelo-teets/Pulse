@@ -1,0 +1,48 @@
+name: TEMP Pulse Neon Audit
+
+on:
+  push:
+    branches:
+      - feat/linkedin-capture-v0.6
+    paths:
+      - '.github/workflows/temp-pulse-neon-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_API_TOKEN: ${{ secrets.NEON_API_TOKEN }}
+    steps:
+      - name: Audit known Pulse Neon project IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="${NEON_API_KEY:-${NEON_API_TOKEN:-}}"
+          if [ -z "$key" ]; then
+            echo "NEON_CREDENTIAL_MISSING"
+            exit 3
+          fi
+          export AUDIT_NEON_KEY="$key"
+          node <<'NODE'
+          const ids=['little-hat-27601841','flat-cherry-46110068'];
+          const base='https://console.neon.tech/api/v2';
+          const headers={Authorization:'Bearer '+process.env.AUDIT_NEON_KEY,Accept:'application/json'};
+          for(const id of ids){
+            const p=await fetch(base+'/projects/'+id,{headers});
+            console.log('PROJECT_STATUS '+id+' '+p.status);
+            if(!p.ok) continue;
+            const pj=await p.json(); const project=pj.project??pj;
+            console.log('PROJECT '+JSON.stringify({id:project.id,name:project.name,org_id:project.org_id??null,region_id:project.region_id??null,created_at:project.created_at??null,updated_at:project.updated_at??null}));
+            const b=await fetch(base+'/projects/'+id+'/branches',{headers});
+            console.log('BRANCH_STATUS '+id+' '+b.status);
+            if(!b.ok) continue;
+            const bj=await b.json(); const branches=bj.branches||[];
+            console.log('BRANCH_COUNT '+id+' '+branches.length);
+            for(const branch of branches) console.log('BRANCH '+id+' '+JSON.stringify({id:branch.id,name:branch.name,primary:branch.primary??false,parent_id:branch.parent_id??null,created_at:branch.created_at??null,updated_at:branch.updated_at??null}));
+          }
+          NODE
