@@ -1,6 +1,7 @@
 (() => {
-  if (window.__pulseLinkedinCaptureLoaded) return;
-  window.__pulseLinkedinCaptureLoaded = true;
+  const CONTENT_VERSION = chrome.runtime?.getManifest?.().version || "dev";
+  if (window.__pulseLinkedinCaptureLoaded === CONTENT_VERSION) return;
+  window.__pulseLinkedinCaptureLoaded = CONTENT_VERSION;
 
   const norm = (v) => String(v || "").replace(/\s+/g, " ").trim();
   const txt = (el) => norm(el?.innerText || el?.textContent);
@@ -46,30 +47,43 @@
   function profileTopCard() {
     const main = document.querySelector("main");
     if (!main) throw new Error("O cabeçalho do perfil não carregou. Aguarde o LinkedIn e tente novamente.");
+
     const expected = pageName();
-    if (!expected) throw new Error("O LinkedIn ainda não informou o nome do perfil no título da página. Aguarde carregar e tente novamente.");
-    const name = [...main.querySelectorAll(".text-heading-xlarge, h1, [data-anonymize='person-name'],span,div")]
+    const sections = [...main.querySelectorAll("section")];
+    const score = (el, index) => {
+      const content = txt(el);
+      if (!content || content.length > 2600) return -100;
+      const rows = lines(el);
+      const startsAsOtherSection = /^(?:Sobre|About|Atividades|Activity|Experiência|Experience|Formação acadêmica|Education|Licenças|Licenses)\b/i.test(rows[0] || "");
+      if (startsAsOtherSection) return -100;
+
+      let points = Math.max(0, 4 - Math.min(index, 4));
+      const directName = one([".text-heading-xlarge", ".pv-text-details__left-panel h1", "h1", "[data-anonymize='person-name']"], el);
+      if (directName && validName(cleanName(directName))) points += 6;
+      if (expected && content.includes(expected)) points += 8;
+      if (el.querySelector('img[alt*="Foto do perfil"],img[alt*="profile photo"]')) points += 3;
+      if (/(?:Dados de contato|Contact info|conexões|connections)/i.test(content)) points += 3;
+      if (el.querySelector('a[href*="/company/"]')) points += 2;
+      return points;
+    };
+
+    let best = null;
+    let bestScore = -100;
+    sections.forEach((el, index) => {
+      const value = score(el, index);
+      if (value > bestScore) { best = el; bestScore = value; }
+    });
+    if (best && bestScore >= 4) return best;
+
+    const nameNode = [...main.querySelectorAll(".text-heading-xlarge, h1, [data-anonymize='person-name'],span,div")]
       .find(el => {
         const value = cleanName(txt(el));
         return el.children?.length === 0 && validName(value) && (!expected || value === expected) && !el.closest("nav,aside");
       });
-    const sections = [...main.querySelectorAll("section")];
-    const isProfileCard = el => {
-      const content = txt(el);
-      return (!expected || content.includes(expected)) &&
-        !/(?:^|\n)(?:Atividades|Activity|Experiência|Experience)(?:\n|$)/i.test(el.innerText || "") &&
-        content.length < 1800 && (expected ? content.includes(expected) : !!name);
-    };
-    // Modern LinkedIn renders the name as plain nested text without its old CSS class.
-    const bounded = sections.find(isProfileCard);
-    // Never widen this scope to main: main also contains Activity and unrelated company links.
-    let card = bounded || name?.closest("section,[data-view-name='profile-card']");
-    if (!card && name) {
-      card = name;
-      while (card.parentElement && card.parentElement !== main && card.parentElement.parentElement !== main) card = card.parentElement;
-    }
-    if (!card || !isProfileCard(card)) throw new Error("Não foi possível isolar o cabeçalho do perfil. Aguarde a página carregar.");
-    return card;
+    const bounded = nameNode?.closest("section,[data-view-name='profile-card']");
+    if (bounded) return bounded;
+
+    throw new Error("Não foi possível isolar o cabeçalho do perfil. Aguarde a página carregar.");
   }
 
   function topCardLines(top) {
@@ -77,26 +91,40 @@
   }
 
   function profileName(top) {
-    const direct = cleanName(one([
+    const expected = pageName();
+    const directCandidates = [
       ".text-heading-xlarge",
       ".pv-text-details__left-panel h1",
       "h1",
       '[data-anonymize="person-name"]'
-    ], top));
-    if (validName(direct) && (!pageName() || direct === pageName())) return direct;
-    const expected = pageName();
+    ];
+    for (const selector of directCandidates) {
+      for (const el of top.querySelectorAll(selector)) {
+        const value = cleanName(txt(el));
+        if (validName(value) && (!expected || value === expected)) return value;
+      }
+    }
     if (expected && txt(top).includes(expected)) return expected;
+
     const imageAlt = cleanName(oneAttr([
       'img[alt*="Foto do perfil"]',
       'img[alt*="profile photo"]'
     ], "alt", top).replace(/^(?:Foto do perfil de|Profile photo of)\s+/i, ""));
     if (validName(imageAlt)) return imageAlt;
+
     const aria = cleanName(oneAttr([
       '[aria-label*="perfil"]',
       '[aria-label*="profile"]'
     ], "aria-label", top).replace(/^(?:Visualizar perfil de|View profile of|Perfil de|Profile of)\s+/i, ""));
     if (validName(aria)) return aria;
-    return "";
+
+    const leafCandidates = [...top.querySelectorAll("h1,span,div")]
+      .filter(el => !el.children?.length)
+      .map(el => cleanName(txt(el)))
+      .filter(value => value.length >= 3 && value.length <= 90 && validName(value))
+      .filter(value => !/[|@]/.test(value) && !/,/.test(value))
+      .filter(value => !/(?:Dados de contato|Contact info|São Paulo|Brasil|Brazil|Região|University|Universidade|conexões|connections)/i.test(value));
+    return leafCandidates[0] || "";
   }
 
   function profileLocation(top) {
@@ -117,10 +145,15 @@
     const m = body.match(/([A-ZÀ-Ú][^·\n]{2,80},\s*[A-ZÀ-Ú][^·\n]{2,80},\s*(?:Brasil|Brazil|Portugal|United States|USA))/i);
     if (m) return norm(m[1]);
     const all = topCardLines(top);
-    const contact = all.findIndex(x => /(?:Dados de contato|Contact info)/i.test(x));
-    if (contact > 0) {
-      const value = all[contact - 1].replace(/\s*[·•]\s*(?:Dados de contato|Contact info).*$/i, "");
-      if (value.length < 100 && !/(seguidores|followers|conexões|connections)/i.test(value)) return value;
+    const contactLine = all.find(x => /(?:Dados de contato|Contact info)/i.test(x));
+    if (contactLine) {
+      const inline = contactLine.replace(/\s*[·•]?\s*(?:Dados de contato|Contact info).*$/i, "").trim();
+      if (inline && inline.length < 100 && !/(seguidores|followers|conexões|connections)/i.test(inline)) return inline;
+      const contact = all.indexOf(contactLine);
+      if (contact > 0) {
+        const previous = all[contact - 1];
+        if (previous.length < 100 && !/(seguidores|followers|conexões|connections)/i.test(previous)) return previous;
+      }
     }
     return "";
   }
