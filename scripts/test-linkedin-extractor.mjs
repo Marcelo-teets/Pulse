@@ -31,14 +31,14 @@ function tagged(tag, text, children = [], attrs = {}, classes = []) {
   if (tag === "section") for (const child of children) child.section = n;
   return n;
 }
-function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, pageTitle = null, prependNoise = false }) {
+function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false }) {
   const nameNode = tagged("div", name, [], {}, modern ? [] : ["text-heading-xlarge"]);
   const header = tagged("section", "", [
     tagged("h1", "Foto do perfil"),
     ...omitName ? [] : [nameNode],
     tagged("div", title, [], {}, modern ? [] : ["text-body-medium"]),
     tagged("span", place, [], {}, modern ? [] : ["text-body-small"]),
-    ...modern ? [tagged("span", "Dados de contato")] : [],
+    ...includeContact ? [tagged("span", "Dados de contato")] : [],
     ...omitCompany ? [] : [tagged("a", `Ver empresa: ${company}`, [], {href:`https://www.linkedin.com/company/${slug}/`})]
   ]);
   header.innerText = `${name}\n${title}\n${place}\n${modern ? "Dados de contato\n" : ""}${omitCompany ? "" : company}`;
@@ -107,4 +107,7 @@ assert.equal(missingLocation.profile.current_title, "CFO");
 const missingCompanyEvidence = capture({name:"Daniela Batista dos Santos",title:"CFO",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,pageTitle:"LinkedIn",omitCompany:true});
 assert.equal(missingCompanyEvidence.ok, false);
 
-console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, missing-name/title/company, generic-title and missing-location guards OK");
+const weakSingleSignal = capture({name:"Daniela Batista dos Santos",title:"CFO",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,includeContact:false,pageTitle:"LinkedIn"});
+assert.equal(weakSingleSignal.ok, false);
+
+console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, weak-single-signal, missing-name/title/company, generic-title and missing-location guards OK");
