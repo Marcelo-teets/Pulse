@@ -118,7 +118,7 @@
     for (const selector of directCandidates) {
       for (const el of top.querySelectorAll(selector)) {
         const value = cleanName(txt(el));
-        if (validName(value) && (!expected || value === expected)) return value;
+        if (looksLikePersonName(value) && (!expected || value === expected || expected.includes(value) || value.includes(expected))) return value;
       }
     }
     if (expected && txt(top).includes(expected)) return expected;
