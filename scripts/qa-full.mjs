@@ -24,7 +24,7 @@ critical.forEach(exists);
 
 const manifest = JSON.parse(read("extensions/linkedin-capture/manifest.json"));
 assert.equal(manifest.manifest_version, 3);
-assert.equal(manifest.version, "0.8.2");
+assert.equal(manifest.version, "0.8.3");
 assert.ok(manifest.permissions.includes("scripting"));
 assert.ok(manifest.content_scripts.some((x) => x.matches.some((m) => m.includes("linkedin.com/in/"))));
 
@@ -40,6 +40,9 @@ for (const marker of [
 ]) assert.ok(content.includes(marker), `missing extractor marker: ${marker}`);
 assert.ok(content.includes("Atividades|Activity|Experiência|Experience"), "top-card section guard missing");
 assert.ok(content.includes("CEO|CFO|CTO|COO"), "job-title-as-name guard missing");
+assert.ok(content.includes('if (!full_name) throw new Error'), "content extractor must fail closed without a name");
+assert.ok(content.includes('if (!headline) throw new Error'), "content extractor must fail closed without a headline");
+assert.ok(content.includes('if (!role.current_company || !role.company_url)'), "content extractor must fail closed without company evidence");
 
 const bg = read("extensions/linkedin-capture/background.js");
 for (const marker of [
@@ -49,7 +52,9 @@ for (const marker of [
   "completePerson",
   "RETRY_OUTBOX",
   "x-pulse-device-token",
-  "if(!person.full_name||!person.current_title||!person.current_company||!companyUrl)"
+  "if(!person.full_name||!person.current_title||!person.current_company||!companyUrl)",
+  "chrome.scripting.executeScript",
+  "companyAboutUrl"
 ]) assert.ok(bg.includes(marker), `missing background safeguard: ${marker}`);
 
 const api = read("functions/linkedin/index.ts");
@@ -100,10 +105,16 @@ const forbidden = [
   "sk_live_",
   "AIzaSy"
 ];
-const scanFiles = critical.concat(["README.md",".env.example"]);
+const scanFiles = critical.concat(["README.md",".env.example","extensions/linkedin-capture/README.md","docs/linkedin-capture-architecture.md"]);
 for (const file of scanFiles) {
   const data = read(file);
   for (const token of forbidden) assert.ok(!data.includes(token), `possible secret leaked in ${file}: ${token}`);
 }
+
+const extensionReadme = read("extensions/linkedin-capture/README.md");
+assert.ok(extensionReadme.includes("v0.8.3"), "extension README version is stale");
+const architecture = read("docs/linkedin-capture-architecture.md");
+assert.ok(architecture.includes("v0.8.3"), "architecture extension version is stale");
+assert.ok(architecture.includes("API v0.7.0"), "architecture API version is stale");
 
 console.log("Pulse full structural QA: OK");
