@@ -246,9 +246,13 @@
     return null;
   }
 
-  function labelValue(labels) {
+  function companyScope() {
+    return section(["Sobre", "About", "Visão geral", "Overview"]) || document.querySelector("main") || document.body;
+  }
+
+  function labelValue(labels, root = document) {
     const wanted = labels.map((x) => x.toLowerCase());
-    for (const el of document.querySelectorAll("dt,h3,span,div")) {
+    for (const el of root.querySelectorAll("dt,h3,span,div")) {
       if (!wanted.includes(txt(el).toLowerCase())) continue;
       const parent = el.parentElement;
       const sibling = el.nextElementSibling;
@@ -259,21 +263,21 @@
     return { value: "", root: null };
   }
 
-  function website(ld) {
+  function website(ld, root) {
     if (ld?.url && !/linkedin\.com/i.test(ld.url)) return String(ld.url);
-    const lab = labelValue(["Website", "Site"]);
+    const lab = labelValue(["Website", "Site"], root);
     const link = lab.root?.querySelector('a[href^="http"]');
     if (link?.href && !/linkedin\.com/i.test(link.href)) return link.href;
-    for (const a of document.querySelectorAll('a[href^="http"]')) {
+    for (const a of root.querySelectorAll('a[href^="http"]')) {
       if (!/linkedin\.com/i.test(a.href) && /(website|site|visitar|visit)/i.test(txt(a))) return a.href;
     }
     return /^https?:\/\//i.test(lab.value) ? lab.value : "";
   }
 
-  function employeeCount() {
-    const lab = labelValue(["Company size", "Tamanho da empresa"]);
+  function employeeCount(root) {
+    const lab = labelValue(["Company size", "Tamanho da empresa"], root);
     if (lab.value) return lab.value;
-    const body = txt(document.body);
+    const body = txt(root);
     for (const re of [
       /([\d.,]+\s*[–-]\s*[\d.,]+\s+(?:employees|funcionários))/i,
       /([\d.,]+\+\s+(?:employees|funcionários))/i,
@@ -282,23 +286,28 @@
     return "";
   }
 
-  function description(ld) {
+  function description(ld, root) {
+    const vals = [...root.querySelectorAll("p,div.break-words,span.break-words")]
+      .map(txt)
+      .filter((v) => v.length >= 40 && !/(followers|seguidores|employees|funcionários)/i.test(v));
+    if (vals[0]) return vals[0];
     if (norm(ld?.description).length >= 40) return norm(ld.description);
-    const about = section(["Sobre", "About", "Visão geral", "Overview"]);
-    if (about) {
-      const vals = [...about.querySelectorAll("p,div.break-words,span.break-words")].map(txt).filter((v) => v.length >= 40);
-      if (vals[0]) return vals[0];
-    }
-    return [...document.querySelectorAll("main p,main div.break-words")].map(txt).find((v) => v.length >= 80 && !/(followers|seguidores|employees|funcionários)/i.test(v)) || "";
+    return "";
   }
 
   function extractCompany() {
+    const root = companyScope();
+    const visibleName = cleanCompany(one(["main h1",".org-top-card-summary__title","h1"]));
     const ld = jsonLdOrganization();
+    const ldName = cleanCompany(norm(ld?.name));
+    const trustedLd = !visibleName || !ldName || visibleName.toLocaleLowerCase() === ldName.toLocaleLowerCase() ? ld : null;
+    const company_name = visibleName || ldName;
+    if (!company_name) throw new Error("Não encontrei o nome da empresa na página.");
     return {
-      company_name: norm(ld?.name) || one(["h1","main h1",".org-top-card-summary__title"]),
-      description: description(ld),
-      website: website(ld),
-      employee_count: employeeCount(),
+      company_name,
+      description: description(trustedLd, root),
+      website: website(trustedLd, root),
+      employee_count: employeeCount(root),
       captured_at: new Date().toISOString()
     };
   }
