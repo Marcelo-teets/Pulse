@@ -1,4 +1,5 @@
 const $=(id)=>document.getElementById(id);
+$("versionLabel").textContent=`v${chrome.runtime.getManifest().version}`;
 function msg(text,type=""){ $("message").textContent=text; $("message").className=`message ${type}`.trim(); $("statusDot").className=`dot ${type==="success"?"ok":type==="error"?"error":type==="busy"?"busy":""}`.trim(); }
 function fmt(v){if(!v)return"—";const d=new Date(v);return Number.isNaN(d.getTime())?v:d.toLocaleString("pt-BR")}
 function val(id,v){$(id).value=v||""}

@@ -4,8 +4,13 @@
 
   const norm = (v) => String(v || "").replace(/\s+/g, " ").trim();
   const txt = (el) => norm(el?.innerText || el?.textContent);
+  const attr = (el, name) => norm(el?.getAttribute?.(name));
   const one = (selectors, root = document) => {
     for (const s of selectors) { const el = root.querySelector(s); if (txt(el)) return txt(el); }
+    return "";
+  };
+  const oneAttr = (selectors, name, root = document) => {
+    for (const s of selectors) { const el = root.querySelector(s); const value = attr(el, name); if (value) return value; }
     return "";
   };
   const canonical = () => {
@@ -19,6 +24,7 @@
   };
   const lines = (el) => [...new Set(String(el?.innerText || "").split("\n").map(norm).filter(Boolean))];
   const cleanCompany = (v) => norm(v).replace(/\s*(?:\|\s*)?LinkedIn\s*$/i, "").replace(/\s+logo$/i, "");
+  const cleanName = (v) => norm(v).replace(/\s*[·•]\s*\d+(?:º|st|nd|rd|th)?\s*$/i, "").replace(/\s+(?:visualizar perfil|view profile).*$/i, "");
   const cleanTitle = (v) => norm(v).replace(/\s+at\s+.+$/i, "").replace(/\s+(?:na|no|em)\s+.+$/i, "");
   const isNoise = (v) => /^(contato|contact info|conectar|connect|seguir|follow|enviar mensagem|message|mais|more|verificado|verified|grau|degree|seguidores|followers|conexões|connections)$/i.test(norm(v));
   const section = (names) => {
@@ -41,10 +47,31 @@
   }
 
   function profileName(top) {
-    const fromH1 = one(["h1"], top);
-    if (fromH1) return fromH1;
-    const m = document.title.match(/^(.+?)\s+\|/);
-    return norm(m?.[1]);
+    const direct = cleanName(one([
+      ".text-heading-xlarge",
+      ".pv-text-details__left-panel h1",
+      "h1",
+      '[data-anonymize="person-name"]'
+    ], top));
+    if (direct) return direct;
+    const imageAlt = cleanName(oneAttr([
+      'img[alt*="Foto do perfil"]',
+      'img[alt*="profile photo"]'
+    ], "alt", top).replace(/^(?:Foto do perfil de|Profile photo of)\s+/i, ""));
+    if (imageAlt) return imageAlt;
+    const aria = cleanName(oneAttr([
+      '[aria-label*="perfil"]',
+      '[aria-label*="profile"]'
+    ], "aria-label", top).replace(/^(?:Visualizar perfil de|View profile of|Perfil de|Profile of)\s+/i, ""));
+    if (aria) return aria;
+    const meta = cleanName(attr(document.querySelector('meta[property="og:title"],meta[name="title"]'), "content").replace(/\s+\|\s+LinkedIn.*$/i, ""));
+    if (meta) return meta;
+    const title = cleanName((document.title.match(/^(.+?)\s+\|/) || [])[1]);
+    if (title && !/^linkedin$/i.test(title)) return title;
+    try {
+      const slug = new URL(location.href).pathname.match(/^\/in\/([^/?#]+)/i)?.[1] || "";
+      return slug ? slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "";
+    } catch { return ""; }
   }
 
   function profileLocation(top) {
@@ -52,14 +79,18 @@
       ".text-body-small.inline.t-black--light.break-words",
       "span.text-body-small.inline",
       ".pv-text-details__left-panel span.text-body-small",
-      '[data-view-name="profile-card"] .text-body-small'
+      '[data-view-name="profile-card"] .text-body-small',
+      '.pv-text-details__left-panel span[aria-hidden="true"]'
     ];
     for (const s of candidates) {
       for (const el of top.querySelectorAll(s)) {
         const value = txt(el);
-        if (value && !/(contato|contact info|seguidores|followers|conexões|connections)/i.test(value)) return value;
+        if (value && !/(contato|contact info|seguidores|followers|conexões|connections|degree|grau)/i.test(value)) return value.replace(/\s*[·•]\s*(?:Dados de contato|Contact info).*$/i, "");
       }
     }
+    const body = topCardLines(top).join(" · ");
+    const m = body.match(/([A-ZÀ-Ú][^·\n]{2,80},\s*[A-ZÀ-Ú][^·\n]{2,80},\s*(?:Brasil|Brazil|Portugal|United States|USA))/i);
+    if (m) return norm(m[1]);
     return "";
   }
 
@@ -81,7 +112,7 @@
   function topCardCompany(top, headline) {
     const links = [...top.querySelectorAll('a[href*="/company/"]')];
     for (const link of links) {
-      const company = cleanCompany(txt(link).split(" · ")[0]);
+      const company = cleanCompany((txt(link) || attr(link, "aria-label") || attr(link.querySelector("img"), "alt")).split(" · ")[0]);
       const url = companyUrl(link.href);
       if (company && url) return { current_title: headline, current_company: company, company_url: url };
     }
@@ -104,7 +135,7 @@
         const body = cardLines.join(" ");
         const isCurrent = /(presente|present|o momento|atual)/i.test(body);
         if (!isCurrent && companyLinks.indexOf(link) > 0) continue;
-        const company = cleanCompany(txt(link).split(" · ")[0]);
+        const company = cleanCompany((txt(link) || attr(link, "aria-label") || attr(link.querySelector("img"), "alt")).split(" · ")[0]);
         const likelyTitle = cleanTitle(cardLines.find((x) => x !== company && !/(presente|present|\b20\d{2}\b|tempo integral|full[- ]?time|localidade|location|meses|anos|yrs|mos)/i.test(x)) || "");
         if (company) return { current_title: likelyTitle || headline, current_company: company, company_url: companyUrl(link.href) };
       }
