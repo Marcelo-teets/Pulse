@@ -12,6 +12,7 @@ function node(text = "", children = [], attributes = {}) {
         .filter(child => selector.split(",").some(s => {
           s = s.trim();
           if (s === "h1" || s === "h2") return child.tag === s;
+          if (s === "section" || s === "span" || s === "div") return child.tag === s;
           if (s.startsWith(".text-heading-xlarge")) return child.classes?.includes("text-heading-xlarge");
           if (s.includes("/company/")) return child.tag === "a" && child.href?.includes("/company/");
           if (s.includes("text-body-medium")) return child.classes?.includes("text-body-medium");
@@ -30,16 +31,17 @@ function tagged(tag, text, children = [], attrs = {}, classes = []) {
   if (tag === "section") for (const child of children) child.section = n;
   return n;
 }
-function capture({ name, title, place, company, slug, unrelated, omitName = false }) {
-  const nameNode = tagged("div", name, [], {}, ["text-heading-xlarge"]);
+function capture({ name, title, place, company, slug, unrelated, omitName = false, modern = false }) {
+  const nameNode = tagged("div", name, [], {}, modern ? [] : ["text-heading-xlarge"]);
   const header = tagged("section", "", [
     tagged("h1", "Foto do perfil"),
     ...omitName ? [] : [nameNode],
-    tagged("div", title, [], {}, ["text-body-medium"]),
-    tagged("span", place, [], {}, ["text-body-small"]),
+    tagged("div", title, [], {}, modern ? [] : ["text-body-medium"]),
+    tagged("span", place, [], {}, modern ? [] : ["text-body-small"]),
+    ...modern ? [tagged("span", "Dados de contato")] : [],
     tagged("a", `Ver empresa: ${company}`, [], {href:`https://www.linkedin.com/company/${slug}/`})
   ]);
-  header.innerText = `${name}\n${title}\n${place}\n${company}`;
+  header.innerText = `${name}\n${title}\n${place}\n${modern ? "Dados de contato\n" : ""}${company}`;
   const activity = tagged("section", "Atividades", [tagged("a", unrelated, [], {href:"https://www.linkedin.com/company/unrelated/"})]);
   const main = tagged("main", "", [header, activity]);
   const document = {
@@ -67,4 +69,10 @@ assert.equal(edisio.profile.current_company, "Z.ro Global Payments");
 assert.equal(edisio.profile.full_name, "Edísio Pereira Neto");
 const missing = capture({name:"",title:"CEO",place:"Brasil",company:"Ayude",slug:"ayude",unrelated:"PIT",omitName:true});
 assert.equal(missing.ok, false);
-console.log("Extractor regressions: Guilherme, Edísio and missing-name guard OK");
+const daniela = capture({name:"Daniela Batista dos Santos",title:"CFO | Board Advisor | Conselheira Consultiva | Investidora Anjo",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true});
+assert.equal(daniela.ok, true);
+assert.equal(daniela.profile.full_name, "Daniela Batista dos Santos");
+assert.equal(daniela.profile.current_title, "CFO | Board Advisor | Conselheira Consultiva | Investidora Anjo");
+assert.equal(daniela.profile.current_company, "Pagaleve");
+assert.equal(daniela.profile.location, "São Paulo e Região");
+console.log("Extractor regressions: Guilherme, Edísio, Daniela and missing-name guard OK");

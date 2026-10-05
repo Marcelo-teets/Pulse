@@ -37,20 +37,38 @@
   };
 
   const validName = (v) => /\p{L}/u.test(v) && !/^(?:foto do perfil|profile photo|linkedin|perfil|profile|atividades|activity)$/i.test(v) && !/^(?:ver empresa|view company)/i.test(v);
+  const pageName = () => {
+    const title = attr(document.querySelector('meta[property="og:title"],meta[name="title"]'), "content") || document.title;
+    if (!/(?:\||[-–])\s+LinkedIn/i.test(title)) return "";
+    const name = cleanName(title.replace(/\s+(?:\||[-–])\s+LinkedIn.*$/i, ""));
+    return validName(name) ? name : "";
+  };
   function profileTopCard() {
     const main = document.querySelector("main");
     if (!main) throw new Error("O cabeçalho do perfil não carregou. Aguarde o LinkedIn e tente novamente.");
-    const name = [...main.querySelectorAll(".text-heading-xlarge, h1, [data-anonymize='person-name']")]
-      .find(el => validName(cleanName(txt(el))) && !el.closest("nav,aside"));
-    if (!name) throw new Error("Não encontrei o nome no cabeçalho do perfil. Aguarde a página carregar.");
+    const expected = pageName();
+    if (!expected) throw new Error("O LinkedIn ainda não informou o nome do perfil no título da página. Aguarde carregar e tente novamente.");
+    const name = [...main.querySelectorAll(".text-heading-xlarge, h1, [data-anonymize='person-name'],span,div")]
+      .find(el => {
+        const value = cleanName(txt(el));
+        return el.children?.length === 0 && validName(value) && (!expected || value === expected) && !el.closest("nav,aside");
+      });
+    const sections = [...main.querySelectorAll("section")];
+    const isProfileCard = el => {
+      const content = txt(el);
+      return (!expected || content.includes(expected)) &&
+        !/(?:^|\n)(?:Atividades|Activity|Experiência|Experience)(?:\n|$)/i.test(el.innerText || "") &&
+        content.length < 1800 && (expected ? content.includes(expected) : !!name);
+    };
+    // Modern LinkedIn renders the name as plain nested text without its old CSS class.
+    const bounded = sections.find(isProfileCard);
     // Never widen this scope to main: main also contains Activity and unrelated company links.
-    let card = name.closest("section,[data-view-name='profile-card']");
-    if (!card) {
+    let card = bounded || name?.closest("section,[data-view-name='profile-card']");
+    if (!card && name) {
       card = name;
       while (card.parentElement && card.parentElement !== main && card.parentElement.parentElement !== main) card = card.parentElement;
     }
-    if (!card || /(?:Atividades|Activity)[\s\S]*(?:Experiência|Experience)/i.test(txt(card)))
-      throw new Error("Não foi possível isolar o cabeçalho do perfil.");
+    if (!card || !isProfileCard(card)) throw new Error("Não foi possível isolar o cabeçalho do perfil. Aguarde a página carregar.");
     return card;
   }
 
@@ -65,7 +83,9 @@
       "h1",
       '[data-anonymize="person-name"]'
     ], top));
-    if (validName(direct)) return direct;
+    if (validName(direct) && (!pageName() || direct === pageName())) return direct;
+    const expected = pageName();
+    if (expected && txt(top).includes(expected)) return expected;
     const imageAlt = cleanName(oneAttr([
       'img[alt*="Foto do perfil"]',
       'img[alt*="profile photo"]'
@@ -76,10 +96,7 @@
       '[aria-label*="profile"]'
     ], "aria-label", top).replace(/^(?:Visualizar perfil de|View profile of|Perfil de|Profile of)\s+/i, ""));
     if (validName(aria)) return aria;
-    const meta = cleanName(attr(document.querySelector('meta[property="og:title"],meta[name="title"]'), "content").replace(/\s+\|\s+LinkedIn.*$/i, ""));
-    if (validName(meta)) return meta;
-    const title = cleanName((document.title.match(/^(.+?)\s+\|/) || [])[1]);
-    return validName(title) ? title : "";
+    return "";
   }
 
   function profileLocation(top) {
@@ -99,6 +116,12 @@
     const body = topCardLines(top).join(" · ");
     const m = body.match(/([A-ZÀ-Ú][^·\n]{2,80},\s*[A-ZÀ-Ú][^·\n]{2,80},\s*(?:Brasil|Brazil|Portugal|United States|USA))/i);
     if (m) return norm(m[1]);
+    const all = topCardLines(top);
+    const contact = all.findIndex(x => /(?:Dados de contato|Contact info)/i.test(x));
+    if (contact > 0) {
+      const value = all[contact - 1].replace(/\s*[·•]\s*(?:Dados de contato|Contact info).*$/i, "");
+      if (value.length < 100 && !/(seguidores|followers|conexões|connections)/i.test(value)) return value;
+    }
     return "";
   }
 
@@ -113,6 +136,12 @@
         const value = txt(el);
         if (value && value !== fullName && value !== location && !isNoise(value)) return value;
       }
+    }
+    const rows = topCardLines(top);
+    const index = rows.findIndex(x => cleanName(x) === fullName || x.startsWith(`${fullName} ·`));
+    if (index >= 0) {
+      const next = rows[index + 1];
+      if (next && next !== location && next.length < 240 && !/(?:Dados de contato|Contact info|followers|seguidores)/i.test(next)) return next;
     }
     return "";
   }
