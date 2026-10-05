@@ -18,6 +18,22 @@ jobs:
   qa:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pulse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pulse_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/pulse_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,6 +56,8 @@ jobs:
         run: node scripts/test-linkedin-extractor.mjs
       - name: Authentication unit tests
         run: node scripts/test-auth.mjs
+      - name: Postgres integration tests
+        run: node scripts/test-db-integration.mjs
       - name: Next.js production build
         run: npm run build
       - name: Build extension artifact
