@@ -16,7 +16,7 @@ if (!bg.includes("PAIR_DEVICE") || !bg.includes("x-pulse-device-token")) throw n
 if (!bg.includes("completePerson")) throw new Error("Profile completion guard missing");
 if (bg.includes("nameFromTitle")) throw new Error("Unsafe tab-title name fallback must not exist");
 if (!bg.includes("clearDeviceAuth")) throw new Error("Expired device auth recovery missing");
-if (!bg.includes("actual.url?.startsWith")) throw new Error("Verified company URL guard missing");
+if (!bg.includes("actualUrl.origin!==expected.origin") || !bg.includes("actualPath!==expectedPath")) throw new Error("Exact company URL identity guard missing");
 if (!bg.includes("nome canônico da empresa no LinkedIn")) throw new Error("Canonical company-name reconciliation missing");
 const content = fs.readFileSync(`${root}/content.js`, "utf8");
 if (!content.includes("__pulseLinkedinCaptureLoaded === CONTENT_VERSION")) throw new Error("Version-aware content-script reload guard missing");
