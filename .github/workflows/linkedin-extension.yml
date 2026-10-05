@@ -15,6 +15,13 @@ on:
       - "scripts/test-linkedin-extractor.mjs"
       - ".github/workflows/linkedin-extension.yml"
 
+concurrency:
+  group: linkedin-extension-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
