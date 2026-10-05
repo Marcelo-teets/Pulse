@@ -224,6 +224,9 @@
     const location = profileLocation(top);
     const headline = profileHeadline(top, full_name, location);
     const role = topCardCompany(top, headline) || currentRole(headline);
+    if (!full_name) throw new Error("Não encontrei o nome no cabeçalho do perfil. Aguarde a página carregar.");
+    if (!headline) throw new Error("Não encontrei o cargo/headline no cabeçalho do perfil. Aguarde a página carregar.");
+    if (!role.current_company || !role.company_url) throw new Error("Não encontrei a empresa atual com link válido no perfil.");
     const captured_at = new Date().toISOString();
     const base = { full_name, linkedin_url: canonical(), location, current_title: role.current_title, current_company: role.current_company, captured_at };
     return { ...base, raw_json: { ...base }, _company_url: role.company_url };
