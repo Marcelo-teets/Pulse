@@ -25,6 +25,21 @@ function formatDate(value) {
   }
 }
 
+function displayName(person) {
+  const direct = (person?.full_name || "").trim();
+  if (direct) return direct;
+  try {
+    const slug = new URL(person?.linkedin_url || "").pathname.split("/in/")[1]?.split("/")[0] || "";
+    return slug ? slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()) : "Perfil LinkedIn";
+  } catch {
+    return "Perfil LinkedIn";
+  }
+}
+
+function initials(name) {
+  return name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "?";
+}
+
 function Metric({ label, value, hint, accent }) {
   return (
     <article className="metric-card">
@@ -221,17 +236,10 @@ export default function Home() {
                         <tr key={person.id || person.linkedin_url}>
                           <td>
                             <div className="person-cell">
-                              <div className="avatar">
-                                {(person.full_name || "?")
-                                  .split(" ")
-                                  .slice(0, 2)
-                                  .map((part) => part[0])
-                                  .join("")
-                                  .toUpperCase()}
-                              </div>
+                              <div className="avatar">{initials(displayName(person))}</div>
                               <div>
                                 <a href={person.linkedin_url} target="_blank" rel="noreferrer">
-                                  {person.full_name}
+                                  {displayName(person)}
                                 </a>
                                 <small>{person.employee_count || "perfil capturado"}</small>
                               </div>

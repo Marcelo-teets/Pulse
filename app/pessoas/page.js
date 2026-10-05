@@ -8,6 +8,21 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(value));
 }
 
+function displayName(person) {
+  const direct = (person?.full_name || "").trim();
+  if (direct) return direct;
+  try {
+    const slug = new URL(person?.linkedin_url || "").pathname.split("/in/")[1]?.split("/")[0] || "";
+    return slug ? slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()) : "Perfil LinkedIn";
+  } catch {
+    return "Perfil LinkedIn";
+  }
+}
+
+function initials(name) {
+  return name.split(" ").filter(Boolean).slice(0,2).map((part) => part[0]).join("").toUpperCase() || "?";
+}
+
 export default function PessoasPage() {
   const [query, setQuery] = useState("");
   const [data, setData] = useState({ items: [], total: 0, connected: true });
@@ -70,9 +85,9 @@ export default function PessoasPage() {
                 <tr key={person.id}>
                   <td>
                     <div className="person-cell">
-                      <div className="avatar">{person.full_name.split(" ").slice(0,2).map((p) => p[0]).join("").toUpperCase()}</div>
+                      <div className="avatar">{initials(displayName(person))}</div>
                       <div>
-                        <a href={person.linkedin_url} target="_blank" rel="noreferrer">{person.full_name}</a>
+                        <a href={person.linkedin_url} target="_blank" rel="noreferrer">{displayName(person)}</a>
                         <small>{person.linkedin_url}</small>
                       </div>
                     </div>

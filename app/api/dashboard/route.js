@@ -6,8 +6,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const { user, response } = await requireUser();
   if (response) return response;
-  const generatedAt = new Date().toISOString();
-  const db = getPool();
+const generatedAt = new Date().toISOString();
+const db = getPool();
+const displayNameSql = `
+  COALESCE(
+    NULLIF(BTRIM(p.full_name), ''),
+    NULLIF(BTRIM(pc.full_name), ''),
+    NULLIF(INITCAP(REPLACE(REPLACE(SPLIT_PART(SPLIT_PART(p.linkedin_url, '/in/', 2), '/', 1), '-', ' '), '_', ' ')), ''),
+    'Perfil LinkedIn'
+  )
+`;
   const peopleOwnerSql = user.role === "master" ? "" : "WHERE EXISTS (SELECT 1 FROM public.pulse_user_people up WHERE up.person_id = public.linkedin_people.id AND up.user_id = $1)";
   const companyOwnerSql = user.role === "master" ? "" : "WHERE EXISTS (SELECT 1 FROM public.pulse_user_companies uc WHERE uc.company_id = public.linkedin_companies.id AND uc.user_id = $1)";
   const captureOwnerSql = user.role === "master" ? "" : "WHERE owner_user_id = $1";
@@ -51,7 +59,7 @@ export async function GET() {
       db.query(`
         SELECT
           p.id,
-          p.full_name,
+          ${displayNameSql} AS full_name,
           p.linkedin_url,
           p.location,
           p.current_title,
@@ -61,6 +69,7 @@ export async function GET() {
           c.website,
           c.employee_count
         FROM public.linkedin_people p
+        LEFT JOIN public.linkedin_profile_captures pc ON pc.id = p.last_capture_id
         LEFT JOIN public.linkedin_current_roles r ON r.person_id = p.id
         LEFT JOIN public.linkedin_companies c ON c.id = r.company_id
         ${user.role === "master" ? "" : "WHERE EXISTS (SELECT 1 FROM public.pulse_user_people up WHERE up.person_id = p.id AND up.user_id = $1)"}
