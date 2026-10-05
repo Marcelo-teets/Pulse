@@ -17,7 +17,7 @@ export async function GET(request) {
       items: [],
       stats: { total: 0, pending: 0, processing: 0, synced: 0, error: 0 },
       message: "DATABASE_URL não configurada.",
-    });
+    }, { status: 503 });
   }
 
   try {
@@ -69,6 +69,6 @@ export async function GET(request) {
       items: [],
       stats: { total: 0, pending: 0, processing: 0, synced: 0, error: 0 },
       message: "Falha ao consultar a fila de sincronização.",
-    });
+    }, { status: 500 });
   }
 }
