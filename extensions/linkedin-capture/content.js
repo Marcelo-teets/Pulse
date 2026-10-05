@@ -18,6 +18,9 @@
     try { const u = new URL(href, location.origin); const m = u.pathname.match(/^\/company\/[^/?#]+/i); return m ? `${u.origin}${m[0]}` : ""; } catch { return ""; }
   };
   const lines = (el) => [...new Set(String(el?.innerText || "").split("\n").map(norm).filter(Boolean))];
+  const cleanCompany = (v) => norm(v).replace(/\s*(?:\|\s*)?LinkedIn\s*$/i, "").replace(/\s+logo$/i, "");
+  const cleanTitle = (v) => norm(v).replace(/\s+at\s+.+$/i, "").replace(/\s+(?:na|no|em)\s+.+$/i, "");
+  const isNoise = (v) => /^(contato|contact info|conectar|connect|seguir|follow|enviar mensagem|message|mais|more|verificado|verified|grau|degree|seguidores|followers|conexões|connections)$/i.test(norm(v));
   const section = (names) => {
     const labels = names.map((n) => n.toLowerCase());
     for (const h of document.querySelectorAll("h1,h2,h3")) {
@@ -26,6 +29,69 @@
     }
     return null;
   };
+
+  function profileTopCard() {
+    const h1 = document.querySelector("main h1") || document.querySelector("h1");
+    if (!h1) return document.querySelector("main section") || document.querySelector("main") || document;
+    return h1.closest("section") || h1.closest('[data-view-name="profile-card"]') || h1.parentElement?.closest("section") || h1.parentElement || document;
+  }
+
+  function topCardLines(top) {
+    return lines(top).filter((x) => !isNoise(x));
+  }
+
+  function profileName(top) {
+    const fromH1 = one(["h1"], top);
+    if (fromH1) return fromH1;
+    const m = document.title.match(/^(.+?)\s+\|/);
+    return norm(m?.[1]);
+  }
+
+  function profileLocation(top) {
+    const candidates = [
+      ".text-body-small.inline.t-black--light.break-words",
+      "span.text-body-small.inline",
+      ".pv-text-details__left-panel span.text-body-small",
+      '[data-view-name="profile-card"] .text-body-small'
+    ];
+    for (const s of candidates) {
+      for (const el of top.querySelectorAll(s)) {
+        const value = txt(el);
+        if (value && !/(contato|contact info|seguidores|followers|conexões|connections)/i.test(value)) return value;
+      }
+    }
+    return "";
+  }
+
+  function profileHeadline(top, fullName, location) {
+    const candidates = [
+      ".text-body-medium.break-words",
+      "div.text-body-medium",
+      ".pv-text-details__left-panel div.text-body-medium"
+    ];
+    for (const s of candidates) {
+      for (const el of top.querySelectorAll(s)) {
+        const value = txt(el);
+        if (value && value !== fullName && value !== location && !isNoise(value)) return value;
+      }
+    }
+    return topCardLines(top).find((x) => x !== fullName && x !== location && !/(followers|seguidores|connections|conexões)/i.test(x)) || "";
+  }
+
+  function topCardCompany(top, headline) {
+    const links = [...top.querySelectorAll('a[href*="/company/"]')];
+    for (const link of links) {
+      const company = cleanCompany(txt(link).split(" · ")[0]);
+      const url = companyUrl(link.href);
+      if (company && url) return { current_title: headline, current_company: company, company_url: url };
+    }
+    const patterns = [/^(.+?)\s+(?:at|@)\s+(.+)$/i, /^(.+?)\s+(?:na|no|em)\s+(.+)$/i];
+    for (const p of patterns) {
+      const m = headline.match(p);
+      if (m) return { current_title: norm(m[1]), current_company: cleanCompany(m[2]), company_url: "" };
+    }
+    return null;
+  }
 
   function currentRole(headline) {
     const exp = section(["Experiência", "Experience"]);
@@ -38,30 +104,24 @@
         const body = cardLines.join(" ");
         const isCurrent = /(presente|present|o momento|atual)/i.test(body);
         if (!isCurrent && companyLinks.indexOf(link) > 0) continue;
-        const company = txt(link).split(" · ")[0];
-        const likelyTitle = cardLines.find((x) => x !== company && !/(presente|present|\b20\d{2}\b|tempo integral|full[- ]?time|localidade|location)/i.test(x)) || "";
-        if (company) return { current_title: likelyTitle, current_company: company, company_url: companyUrl(link.href) };
+        const company = cleanCompany(txt(link).split(" · ")[0]);
+        const likelyTitle = cleanTitle(cardLines.find((x) => x !== company && !/(presente|present|\b20\d{2}\b|tempo integral|full[- ]?time|localidade|location|meses|anos|yrs|mos)/i.test(x)) || "");
+        if (company) return { current_title: likelyTitle || headline, current_company: company, company_url: companyUrl(link.href) };
       }
     }
     const patterns = [/^(.+?)\s+(?:at|@)\s+(.+)$/i, /^(.+?)\s+(?:na|no|em)\s+(.+)$/i];
     for (const p of patterns) {
-      const m = headline.match(p); if (m) return { current_title: norm(m[1]), current_company: norm(m[2]), company_url: "" };
+      const m = headline.match(p); if (m) return { current_title: norm(m[1]), current_company: cleanCompany(m[2]), company_url: "" };
     }
-    const link = document.querySelector('main a[href*="/company/"]');
-    return { current_title: headline, current_company: txt(link), company_url: companyUrl(link?.href) };
+    return { current_title: headline, current_company: "", company_url: "" };
   }
 
   function extractProfile() {
-    const main = document.querySelector("main") || document;
-    const full_name = one(["h1"], main) || one(["h1"]);
-    const location = one([
-      ".text-body-small.inline.t-black--light.break-words",
-      "span.text-body-small.inline",
-      "main section span.text-body-small",
-      '[data-view-name="profile-card"] .text-body-small'
-    ], main);
-    const headline = one([".text-body-medium.break-words", "div.text-body-medium", "main section div.text-body-medium"], main);
-    const role = currentRole(headline);
+    const top = profileTopCard();
+    const full_name = profileName(top);
+    const location = profileLocation(top);
+    const headline = profileHeadline(top, full_name, location);
+    const role = topCardCompany(top, headline) || currentRole(headline);
     const captured_at = new Date().toISOString();
     const base = { full_name, linkedin_url: canonical(), location, current_title: role.current_title, current_company: role.current_company, captured_at };
     return { ...base, raw_json: { ...base }, _company_url: role.company_url };
