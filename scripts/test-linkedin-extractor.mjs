@@ -83,6 +83,11 @@ assert.equal(danielaNoTitle.profile.full_name, "Daniela Batista dos Santos");
 assert.equal(danielaNoTitle.profile.current_company, "Pagaleve");
 assert.equal(danielaNoTitle.profile.location, "São Paulo e Região");
 
+const titleWithRole = capture({name:"Daniela Batista dos Santos",title:"CFO | Board Advisor | Conselheira Consultiva | Investidora Anjo",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",pageTitle:"Daniela Batista dos Santos - CFO | LinkedIn"});
+assert.equal(titleWithRole.ok, true);
+assert.equal(titleWithRole.profile.full_name, "Daniela Batista dos Santos");
+assert.equal(titleWithRole.profile.current_company, "Pagaleve");
+
 const noisyDaniela = capture({name:"Daniela Batista dos Santos",title:"CFO | Board Advisor | Conselheira Consultiva | Investidora Anjo",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,pageTitle:"LinkedIn",prependNoise:true});
 assert.equal(noisyDaniela.ok, true);
 assert.equal(noisyDaniela.profile.full_name, "Daniela Batista dos Santos");
