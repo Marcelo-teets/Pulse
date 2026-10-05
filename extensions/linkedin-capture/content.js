@@ -27,6 +27,13 @@
   const cleanCompany = (v) => norm(v).replace(/^(?:ver empresa|view company)\s*:\s*/i, "").replace(/\s*(?:\|\s*)?LinkedIn\s*$/i, "").replace(/\s+logo$/i, "");
   const cleanName = (v) => norm(v).replace(/\s*[·•]\s*\d+(?:º|st|nd|rd|th)?\s*$/i, "").replace(/\s+(?:visualizar perfil|view profile).*$/i, "");
   const cleanTitle = (v) => norm(v).replace(/\s+at\s+.+$/i, "").replace(/\s+(?:na|no|em)\s+.+$/i, "");
+  const looksLikeLocation = (v) => {
+    const value = norm(v);
+    if (!value || value.length > 120) return false;
+    if (/[|@]/.test(value)) return false;
+    if (/(?:CEO|CFO|CTO|COO|Chief|Founder|Co-Founder|Director|Diretor|Diretora|Manager|Gerente|Head|Board|Advisor|Conselheir|Investidor|Investidora|President|Presidente|Partner|Sócio|Sócia)/i.test(value)) return false;
+    return /,|\b(?:Brasil|Brazil|Portugal|United States|USA|Região|Region|Area|Área|Metropolitana|Metropolitan|Greater|State|Estado|Distrito Federal|DF)\b/i.test(value);
+  };
   const isNoise = (v) => /^(contato|contact info|conectar|connect|seguir|follow|enviar mensagem|message|mais|more|verificado|verified|grau|degree|seguidores|followers|conexões|connections)$/i.test(norm(v));
   const section = (names) => {
     const labels = names.map((n) => n.toLowerCase());
@@ -140,7 +147,8 @@
     for (const s of candidates) {
       for (const el of top.querySelectorAll(s)) {
         const value = txt(el);
-        if (value && !/(contato|contact info|seguidores|followers|conexões|connections|degree|grau)/i.test(value)) return value.replace(/\s*[·•]\s*(?:Dados de contato|Contact info).*$/i, "");
+        const cleaned = value.replace(/\s*[·•]\s*(?:Dados de contato|Contact info).*$/i, "");
+        if (cleaned && looksLikeLocation(cleaned) && !/(contato|contact info|seguidores|followers|conexões|connections|degree|grau)/i.test(cleaned)) return cleaned;
       }
     }
     const body = topCardLines(top).join(" · ");
@@ -150,11 +158,11 @@
     const contactLine = all.find(x => /(?:Dados de contato|Contact info)/i.test(x));
     if (contactLine) {
       const inline = contactLine.replace(/\s*[·•]?\s*(?:Dados de contato|Contact info).*$/i, "").trim();
-      if (inline && inline.length < 100 && !/(seguidores|followers|conexões|connections)/i.test(inline)) return inline;
+      if (inline && looksLikeLocation(inline) && !/(seguidores|followers|conexões|connections)/i.test(inline)) return inline;
       const contact = all.indexOf(contactLine);
       if (contact > 0) {
         const previous = all[contact - 1];
-        if (previous.length < 100 && !/(seguidores|followers|conexões|connections)/i.test(previous)) return previous;
+        if (looksLikeLocation(previous) && !/(seguidores|followers|conexões|connections)/i.test(previous)) return previous;
       }
     }
     return "";
@@ -169,14 +177,14 @@
     for (const s of candidates) {
       for (const el of top.querySelectorAll(s)) {
         const value = txt(el);
-        if (value && value !== fullName && value !== location && !isNoise(value)) return value;
+        if (value && value !== fullName && value !== location && !looksLikeLocation(value) && !isNoise(value)) return value;
       }
     }
     const rows = topCardLines(top);
     const index = rows.findIndex(x => cleanName(x) === fullName || x.startsWith(`${fullName} ·`));
     if (index >= 0) {
       const next = rows[index + 1];
-      if (next && next !== location && next.length < 240 && !/(?:Dados de contato|Contact info|followers|seguidores)/i.test(next)) return next;
+      if (next && next !== location && !looksLikeLocation(next) && next.length < 240 && !/(?:Dados de contato|Contact info|followers|seguidores)/i.test(next)) return next;
     }
     return "";
   }
