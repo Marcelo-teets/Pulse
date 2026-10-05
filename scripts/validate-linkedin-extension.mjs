@@ -18,6 +18,7 @@ if (bg.includes("nameFromTitle")) throw new Error("Unsafe tab-title name fallbac
 if (!bg.includes("clearDeviceAuth")) throw new Error("Expired device auth recovery missing");
 if (!bg.includes("actualUrl.origin!==expected.origin") || !bg.includes("actualPath!==expectedPath")) throw new Error("Exact company URL identity guard missing");
 if (!bg.includes("nome canônico da empresa no LinkedIn")) throw new Error("Canonical company-name reconciliation missing");
+if (!bg.includes("safeEndpoint") || !bg.includes('candidate.protocol==="https:"&&candidate.origin===expected.origin')) throw new Error("Pinned API endpoint guard missing");
 const content = fs.readFileSync(`${root}/content.js`, "utf8");
 if (!content.includes("__pulseLinkedinCaptureLoaded === CONTENT_VERSION")) throw new Error("Version-aware content-script reload guard missing");
 if (!content.includes('if (!full_name) throw new Error')) throw new Error("Fail-closed missing-name guard missing");
