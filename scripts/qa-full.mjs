@@ -45,17 +45,20 @@ assert.ok(content.includes('if (!headline) throw new Error'), "content extractor
 assert.ok(content.includes('if (!role.current_company || !role.company_url)'), "content extractor must fail closed without company evidence");
 
 const bg = read("extensions/linkedin-capture/background.js");
+assert.ok(!bg.includes("nameFromTitle"), "unsafe tab-title name fallback must not exist");
 for (const marker of [
   "sendMessageWithRetry",
   "ensureExtractor",
   "captureCompany",
   "completePerson",
+  "clearDeviceAuth",
   "RETRY_OUTBOX",
   "x-pulse-device-token",
   "if(!person.full_name||!person.current_title||!person.current_company||!companyUrl)",
   "chrome.scripting.executeScript",
   "companyAboutUrl"
 ]) assert.ok(bg.includes(marker), `missing background safeguard: ${marker}`);
+assert.ok(bg.includes("difere da empresa atual do perfil"), "company mismatch must fail closed");
 
 const api = read("functions/linkedin/index.ts");
 assert.ok(api.includes('const VERSION = "0.7.0"'));
