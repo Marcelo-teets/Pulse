@@ -12,7 +12,7 @@ export async function GET() {
       app: "pulse",
       database: "not_configured",
       timestamp: new Date().toISOString(),
-    }, { status: 200 });
+    }, { status: 503 });
   }
 
   const pool = new Pool({
@@ -37,7 +37,7 @@ export async function GET() {
       app: "pulse",
       database: "unreachable",
       timestamp: new Date().toISOString(),
-    }, { status: 200 });
+    }, { status: 503 });
   } finally {
     await pool.end().catch(() => {});
   }
