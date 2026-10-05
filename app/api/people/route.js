@@ -19,7 +19,7 @@ export async function GET(request) {
     )
   `;
 
-  if (!db) return Response.json({ connected: false, items: [], total: 0, message: "DATABASE_URL não configurada." });
+  if (!db) return Response.json({ connected: false, items: [], total: 0, message: "DATABASE_URL não configurada." }, { status: 503 });
 
   try {
     const params = [];
@@ -61,6 +61,6 @@ export async function GET(request) {
     return Response.json({ connected: true, items: items.rows, total: total.rows[0]?.total || 0 });
   } catch (error) {
     console.error("People query failed", error);
-    return Response.json({ connected: false, items: [], total: 0, message: "Falha ao consultar pessoas." });
+    return Response.json({ connected: false, items: [], total: 0, message: "Falha ao consultar pessoas." }, { status: 500 });
   }
 }
