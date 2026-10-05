@@ -19,7 +19,7 @@ export async function GET() {
       audit: [],
       quality: { average: null, scored: 0 },
       message: "DATABASE_URL não configurada no Vercel.",
-    });
+    }, { status: 503 });
   }
 
   try {
@@ -70,6 +70,6 @@ export async function GET() {
       audit: [],
       quality: { average: null, scored: 0 },
       message: "Falha ao consultar a telemetria operacional.",
-    });
+    }, { status: 500 });
   }
 }
