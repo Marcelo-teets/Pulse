@@ -31,7 +31,7 @@ function tagged(tag, text, children = [], attrs = {}, classes = []) {
   if (tag === "section") for (const child of children) child.section = n;
   return n;
 }
-function capture({ name, title, place, company, slug, unrelated, omitName = false, modern = false }) {
+function capture({ name, title, place, company, slug, unrelated, omitName = false, modern = false, pageTitle = null }) {
   const nameNode = tagged("div", name, [], {}, modern ? [] : ["text-heading-xlarge"]);
   const header = tagged("section", "", [
     tagged("h1", "Foto do perfil"),
@@ -45,7 +45,7 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
   const activity = tagged("section", "Atividades", [tagged("a", unrelated, [], {href:"https://www.linkedin.com/company/unrelated/"})]);
   const main = tagged("main", "", [header, activity]);
   const document = {
-    title: `${name} | LinkedIn`,
+    title: pageTitle === null ? `${name} | LinkedIn` : pageTitle,
     querySelector(s) { if(s === "main") return main; if(s === 'link[rel="canonical"]') return {href:"https://www.linkedin.com/in/test/"}; return null; },
     querySelectorAll(s) { return main.querySelectorAll(s); }
   };
@@ -75,4 +75,10 @@ assert.equal(daniela.profile.full_name, "Daniela Batista dos Santos");
 assert.equal(daniela.profile.current_title, "CFO | Board Advisor | Conselheira Consultiva | Investidora Anjo");
 assert.equal(daniela.profile.current_company, "Pagaleve");
 assert.equal(daniela.profile.location, "São Paulo e Região");
-console.log("Extractor regressions: Guilherme, Edísio, Daniela and missing-name guard OK");
+
+const danielaNoTitle = capture({name:"Daniela Batista dos Santos",title:"CFO | Board Advisor | Conselheira Consultiva | Investidora Anjo",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,pageTitle:"LinkedIn"});
+assert.equal(danielaNoTitle.ok, true);
+assert.equal(danielaNoTitle.profile.full_name, "Daniela Batista dos Santos");
+assert.equal(danielaNoTitle.profile.current_company, "Pagaleve");
+assert.equal(danielaNoTitle.profile.location, "São Paulo e Região");
+console.log("Extractor regressions: Guilherme, Edísio, Daniela, title-less Daniela and missing-name guard OK");
