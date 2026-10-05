@@ -13,7 +13,10 @@ for (const forbidden of ["BUILD_API_TOKEN","__PULSE_EXTENSION_TOKEN__","x-extens
   if (bg.includes(forbidden)) throw new Error(`Static legacy credential marker found: ${forbidden}`);
 }
 if (!bg.includes("PAIR_DEVICE") || !bg.includes("x-pulse-device-token")) throw new Error("Device pairing auth missing");
-if (!bg.includes("completePerson") || !bg.includes("nameFromTitle")) throw new Error("Tab-title name fallback missing");
+if (!bg.includes("completePerson")) throw new Error("Profile completion guard missing");
+if (bg.includes("nameFromTitle")) throw new Error("Unsafe tab-title name fallback must not exist");
+if (!bg.includes("clearDeviceAuth")) throw new Error("Expired device auth recovery missing");
+if (!bg.includes("difere da empresa atual do perfil")) throw new Error("Fail-closed company mismatch guard missing");
 const content = fs.readFileSync(`${root}/content.js`, "utf8");
 if (!content.includes("__pulseLinkedinCaptureLoaded === CONTENT_VERSION")) throw new Error("Version-aware content-script reload guard missing");
 if (!content.includes('if (!full_name) throw new Error')) throw new Error("Fail-closed missing-name guard missing");
