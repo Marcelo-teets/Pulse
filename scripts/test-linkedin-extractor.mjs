@@ -91,7 +91,15 @@ assert.equal(noisyDaniela.profile.current_company, "Pagaleve");
 const missingHeadline = capture({name:"Daniela Batista dos Santos",title:"",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,pageTitle:"LinkedIn"});
 assert.equal(missingHeadline.ok, false);
 
+const missingNameGenericTitle = capture({name:"",title:"Finance Executive",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,pageTitle:"LinkedIn",omitName:true});
+assert.equal(missingNameGenericTitle.ok, false);
+
+const missingLocation = capture({name:"Daniela Batista dos Santos",title:"CFO",place:"",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,pageTitle:"LinkedIn"});
+assert.equal(missingLocation.ok, true);
+assert.equal(missingLocation.profile.location, "");
+assert.equal(missingLocation.profile.current_title, "CFO");
+
 const missingCompanyEvidence = capture({name:"Daniela Batista dos Santos",title:"CFO",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,pageTitle:"LinkedIn",omitCompany:true});
 assert.equal(missingCompanyEvidence.ok, false);
 
-console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, missing-name, missing-headline and missing-company guards OK");
+console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, missing-name/title/company, generic-title and missing-location guards OK");
