@@ -122,8 +122,9 @@
       .filter(el => !el.children?.length)
       .map(el => cleanName(txt(el)))
       .filter(value => value.length >= 3 && value.length <= 90 && validName(value))
+      .filter(value => value.split(/\s+/).length >= 2 && value.split(/\s+/).length <= 8)
       .filter(value => !/[|@]/.test(value) && !/,/.test(value))
-      .filter(value => !/(?:Dados de contato|Contact info|São Paulo|Brasil|Brazil|Região|University|Universidade|conexões|connections)/i.test(value));
+      .filter(value => !/(?:CEO|CFO|CTO|COO|Founder|Co-Founder|Diretor|Diretora|Director|Head|Board|Advisor|Conselheir|Investidor|Investidora|Dados de contato|Contact info|São Paulo|Brasil|Brazil|Região|University|Universidade|conexões|connections)/i.test(value));
     return leafCandidates[0] || "";
   }
 
