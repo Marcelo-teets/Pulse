@@ -249,6 +249,19 @@ async function persist(requestId: string, person: any, company: any, ownerUserId
       client
     );
 
+    if (ownerUserId) {
+      await q(
+        "INSERT INTO public.pulse_user_people(user_id,person_id,first_seen_at,last_seen_at) VALUES($1::bigint,$2::bigint,$3::timestamptz,$3::timestamptz) ON CONFLICT(user_id,person_id) DO UPDATE SET last_seen_at=EXCLUDED.last_seen_at",
+        [ownerUserId, canonicalPerson[0].id, person.captured_at],
+        client
+      );
+      await q(
+        "INSERT INTO public.pulse_user_companies(user_id,company_id,first_seen_at,last_seen_at) VALUES($1::bigint,$2::bigint,$3::timestamptz,$3::timestamptz) ON CONFLICT(user_id,company_id) DO UPDATE SET last_seen_at=EXCLUDED.last_seen_at",
+        [ownerUserId, canonicalCompany[0].id, company.captured_at],
+        client
+      );
+    }
+
     await client.query("COMMIT");
     return {
       person_id: personCaptureId,

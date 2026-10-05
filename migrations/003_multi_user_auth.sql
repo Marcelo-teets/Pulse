@@ -38,6 +38,26 @@ CREATE INDEX IF NOT EXISTS idx_linkedin_company_captures_owner ON public.linkedi
 CREATE INDEX IF NOT EXISTS idx_linkedin_people_owner ON public.linkedin_people(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_linkedin_companies_owner ON public.linkedin_companies(owner_user_id);
 
+CREATE TABLE IF NOT EXISTS public.pulse_user_people (
+  user_id BIGINT NOT NULL REFERENCES public.pulse_users(id) ON DELETE CASCADE,
+  person_id BIGINT NOT NULL REFERENCES public.linkedin_people(id) ON DELETE CASCADE,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, person_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pulse_user_people_person ON public.pulse_user_people(person_id);
+
+CREATE TABLE IF NOT EXISTS public.pulse_user_companies (
+  user_id BIGINT NOT NULL REFERENCES public.pulse_users(id) ON DELETE CASCADE,
+  company_id BIGINT NOT NULL REFERENCES public.linkedin_companies(id) ON DELETE CASCADE,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, company_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pulse_user_companies_company ON public.pulse_user_companies(company_id);
+
 CREATE OR REPLACE VIEW public.linkedin_device_status AS
 SELECT
   d.device_id,

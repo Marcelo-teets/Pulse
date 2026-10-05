@@ -8,7 +8,9 @@ export async function GET() {
   if (response) return response;
   const generatedAt = new Date().toISOString();
   const db = getPool();
-  const ownerSql = user.role === "master" ? "" : "WHERE owner_user_id = $1";
+  const peopleOwnerSql = user.role === "master" ? "" : "WHERE EXISTS (SELECT 1 FROM public.pulse_user_people up WHERE up.person_id = public.linkedin_people.id AND up.user_id = $1)";
+  const companyOwnerSql = user.role === "master" ? "" : "WHERE EXISTS (SELECT 1 FROM public.pulse_user_companies uc WHERE uc.company_id = public.linkedin_companies.id AND uc.user_id = $1)";
+  const captureOwnerSql = user.role === "master" ? "" : "WHERE owner_user_id = $1";
   const ownerParams = user.role === "master" ? [] : [user.id];
   const queueOwnerSql = user.role === "master" ? "" : "JOIN public.linkedin_profile_captures op ON op.id = q.person_capture_id AND op.owner_user_id = $1";
 
@@ -37,10 +39,10 @@ export async function GET() {
     const [statsResult, peopleResult, companyResult, queueResult] = await Promise.all([
       db.query(`
         SELECT
-          (SELECT count(*)::int FROM public.linkedin_people ${ownerSql}) AS people,
-          (SELECT count(*)::int FROM public.linkedin_companies ${ownerSql}) AS companies,
-          (SELECT count(*)::int FROM public.linkedin_profile_captures ${ownerSql}) AS profile_captures,
-          (SELECT count(*)::int FROM public.linkedin_company_captures ${ownerSql}) AS company_captures,
+          (SELECT count(*)::int FROM public.linkedin_people ${peopleOwnerSql}) AS people,
+          (SELECT count(*)::int FROM public.linkedin_companies ${companyOwnerSql}) AS companies,
+          (SELECT count(*)::int FROM public.linkedin_profile_captures ${captureOwnerSql}) AS profile_captures,
+          (SELECT count(*)::int FROM public.linkedin_company_captures ${captureOwnerSql}) AS company_captures,
           (SELECT count(*)::int FROM public.linkedin_sheet_sync_queue q ${queueOwnerSql} WHERE q.status = 'pending') AS pending_sync,
           (SELECT count(*)::int FROM public.linkedin_sheet_sync_queue q ${queueOwnerSql} WHERE q.status = 'synced') AS synced,
           (SELECT count(*)::int FROM public.linkedin_sheet_sync_queue q ${queueOwnerSql} WHERE q.status = 'processing') AS processing,
@@ -61,7 +63,7 @@ export async function GET() {
         FROM public.linkedin_people p
         LEFT JOIN public.linkedin_current_roles r ON r.person_id = p.id
         LEFT JOIN public.linkedin_companies c ON c.id = r.company_id
-        ${ownerSql ? "WHERE p.owner_user_id = $1" : ""}
+        ${user.role === "master" ? "" : "WHERE EXISTS (SELECT 1 FROM public.pulse_user_people up WHERE up.person_id = p.id AND up.user_id = $1)"}
         ORDER BY p.last_seen_at DESC
         LIMIT 20
       `, ownerParams),
@@ -74,12 +76,12 @@ export async function GET() {
           employee_count,
           last_seen_at
         FROM public.linkedin_companies
-        ${ownerSql}
+        ${user.role === "master" ? "" : "WHERE EXISTS (SELECT 1 FROM public.pulse_user_companies uc WHERE uc.company_id = public.linkedin_companies.id AND uc.user_id = $1)"}
         ORDER BY last_seen_at DESC
         LIMIT 10
       `, ownerParams),
       db.query(`
-        SELECT id, status, attempts, last_error, created_at, synced_at, next_attempt_at
+        SELECT q.id, q.status, q.attempts, q.last_error, q.created_at, q.synced_at, q.next_attempt_at
         FROM public.linkedin_sheet_sync_queue q
         ${queueOwnerSql}
         ORDER BY q.created_at DESC

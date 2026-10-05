@@ -22,7 +22,7 @@ export async function GET(request) {
     }
     if (user.role !== "master") {
       params.push(user.id);
-      conditions.push(`c.owner_user_id = $${params.length}`);
+      conditions.push(`EXISTS (SELECT 1 FROM public.pulse_user_companies uc WHERE uc.company_id = c.id AND uc.user_id = $${params.length})`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     params.push(limit);
