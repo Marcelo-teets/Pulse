@@ -108,7 +108,7 @@ A fila `public.linkedin_sheet_sync_queue` é criada automaticamente por trigger 
 
 O endpoint interno `/api/internal/sheets-sync` processa a fila em lotes, usando `FOR UPDATE SKIP LOCKED`, atualiza as abas `Capturas`, `Pessoas`, `Empresas` e `Operação`, e só marca o item como `synced` após a escrita no Google Sheets concluir.
 
-O Vercel Cron chama esse endpoint a cada 5 minutos.
+No plano Hobby atual da Vercel, o Cron chama esse endpoint 1x por dia às 09:00 UTC (06:00 BRT). Para frequência maior, é necessário migrar o projeto para um plano que aceite execuções mais frequentes.
 
 ### Variáveis obrigatórias no Vercel
 
