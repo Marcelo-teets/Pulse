@@ -58,7 +58,7 @@ for (const marker of [
   "chrome.scripting.executeScript",
   "companyAboutUrl"
 ]) assert.ok(bg.includes(marker), `missing background safeguard: ${marker}`);
-assert.ok(bg.includes("actual.url?.startsWith"), "company page URL identity guard missing");
+assert.ok(bg.includes("actualUrl.origin!==expected.origin") && bg.includes("actualPath!==expectedPath"), "exact company page URL identity guard missing");
 assert.ok(bg.includes("nome canônico da empresa no LinkedIn"), "canonical company-name reconciliation missing");
 
 const api = read("functions/linkedin/index.ts");
@@ -70,6 +70,10 @@ assert.ok(api.includes("ON CONFLICT(linkedin_url) DO UPDATE"));
 assert.ok(api.includes("ON CONFLICT(company_key) DO UPDATE"));
 assert.ok(api.includes("token_hash=$1"));
 assert.ok(api.includes("token_expires_at>NOW()"));
+assert.ok(api.includes('current_title é obrigatório'), "server-side current_title validation missing");
+assert.ok(api.includes('current_company é obrigatório'), "server-side current_company validation missing");
+assert.ok(api.includes("pulse_user_people WHERE user_id=$1::bigint"), "device status counts are not owner scoped");
+assert.ok(api.includes("4[0-9a-f]{3}-[89ab]"), "strict UUID v4 validation missing");
 
 const schema = read("lib/schema.js");
 const dropDevice = schema.indexOf("DROP VIEW IF EXISTS public.linkedin_device_status");
@@ -80,6 +84,10 @@ assert.ok(dropDevice >= 0 && createDevice > dropDevice, "device view recreation 
 assert.ok(dropAudit >= 0 && createAudit > dropAudit, "audit view recreation is not idempotent");
 assert.ok(schema.includes("pg_advisory_xact_lock"), "schema initialization is not serialized across serverless instances");
 assert.ok(schema.includes("ROLLBACK"), "schema initialization rollback guard missing");
+
+const signupRoute = read("app/api/auth/signup/route.js");
+assert.ok(!signupRoute.includes("masterCount"), "first signup must never auto-promote to master");
+assert.ok(signupRoute.includes('masterEmail && email === masterEmail'), "master role must be bound to configured master email");
 
 const companiesRoute = read("app/api/companies/route.js");
 assert.ok(companiesRoute.includes("pulse_user_people"), "company people_count must be scoped to the authenticated user");
@@ -97,7 +105,12 @@ for (const marker of [
   "markError",
   'Operação!B2:B12',
   "api_failures_24h",
-  "LINKEDIN_API_VERSION"
+  "LINKEDIN_API_VERSION",
+  "NOW() - INTERVAL '15 minutes'",
+  'getValues(token, "Pessoas!A2:H")',
+  'getValues(token, "Empresas!A2:G")',
+  'getValues(token, "Capturas!A2:A")',
+  "existingCaptureIds"
 ]) assert.ok(worker.includes(marker), `missing Sheets worker invariant: ${marker}`);
 
 const proxy = read("proxy.js");
