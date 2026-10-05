@@ -95,8 +95,14 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
       .then((response) => response.json())
-      .then((payload) => setUser(payload.user || null))
-      .catch(() => setUser(null));
+      .then((payload) => {
+        if (!payload.authenticated) {
+          window.location.href = "/auth";
+          return;
+        }
+        setUser(payload.user || null);
+      })
+      .catch(() => { window.location.href = "/auth"; });
     refresh();
     const timer = setInterval(refresh, 30000);
     return () => clearInterval(timer);
