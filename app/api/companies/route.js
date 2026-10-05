@@ -11,7 +11,7 @@ export async function GET(request) {
   const q = (searchParams.get("q") || "").trim();
   const limit = Math.min(Math.max(Number(searchParams.get("limit") || 50), 1), 200);
 
-  if (!db) return Response.json({ connected: false, items: [], total: 0, message: "DATABASE_URL não configurada." });
+  if (!db) return Response.json({ connected: false, items: [], total: 0, message: "DATABASE_URL não configurada." }, { status: 503 });
 
   try {
     const params = [];
@@ -58,6 +58,6 @@ export async function GET(request) {
     return Response.json({ connected: true, items: items.rows, total: total.rows[0]?.total || 0 });
   } catch (error) {
     console.error("Companies query failed", error);
-    return Response.json({ connected: false, items: [], total: 0, message: "Falha ao consultar empresas." });
+    return Response.json({ connected: false, items: [], total: 0, message: "Falha ao consultar empresas." }, { status: 500 });
   }
 }
