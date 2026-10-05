@@ -1,41 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Pulse LinkedIn Capture",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "Captura perfis e empresas do LinkedIn com pareamento por dispositivo, fila offline, idempotência e sincronização com o Pulse.",
   "minimum_chrome_version": "114",
-  "permissions": [
-    "activeTab",
-    "storage",
-    "tabs",
-    "alarms",
-    "scripting"
-  ],
+  "permissions": ["activeTab","storage","tabs","alarms","scripting"],
   "host_permissions": [
     "https://*.linkedin.com/*",
     "https://br-delicate-glade-b46j1hyc-linkedin.compute.c-6.us-east-2.aws.neon.tech/*"
   ],
-  "background": {
-    "service_worker": "background.js",
-    "type": "module"
-  },
-  "action": {
-    "default_title": "Pulse LinkedIn Capture",
-    "default_popup": "popup.html"
-  },
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://*.linkedin.com/in/*",
-        "https://*.linkedin.com/company/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ]
+  "background": {"service_worker":"background.js","type":"module"},
+  "action": {"default_title":"Pulse LinkedIn Capture","default_popup":"popup.html"},
+  "content_security_policy": {"extension_pages":"script-src 'self'; object-src 'self'"},
+  "content_scripts": [{
+    "matches": ["https://*.linkedin.com/in/*","https://*.linkedin.com/company/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }]
 }
