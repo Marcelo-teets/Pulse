@@ -98,9 +98,18 @@
         return el.children?.length === 0 && validName(value) && (!expected || value === expected) && !el.closest("nav,aside");
       });
     const bounded = nameNode?.closest("section,[data-view-name='profile-card']");
-    if (bounded) return bounded;
+    if (bounded) {
+      const boundedText = txt(bounded);
+      const boundedEvidence = [
+        !!expected && cleanName(txt(nameNode)) === expected,
+        !!bounded.querySelector('a[href*="/company/"]'),
+        !!bounded.querySelector('img[alt*="Foto do perfil"],img[alt*="profile photo"]'),
+        /(?:Dados de contato|Contact info|conexões|connections)/i.test(boundedText),
+      ].filter(Boolean).length;
+      if (boundedEvidence >= 2) return bounded;
+    }
 
-    throw new Error("Não foi possível isolar o cabeçalho do perfil. Aguarde a página carregar.");
+    throw new Error("Não foi possível isolar o cabeçalho do perfil com evidência suficiente. Aguarde a página carregar.");
   }
 
   function topCardLines(top) {
