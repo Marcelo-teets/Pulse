@@ -74,6 +74,16 @@ const dropAudit = schema.indexOf("DROP VIEW IF EXISTS public.linkedin_api_audit_
 const createAudit = schema.indexOf("CREATE VIEW public.linkedin_api_audit_safe");
 assert.ok(dropDevice >= 0 && createDevice > dropDevice, "device view recreation is not idempotent");
 assert.ok(dropAudit >= 0 && createAudit > dropAudit, "audit view recreation is not idempotent");
+assert.ok(schema.includes("pg_advisory_xact_lock"), "schema initialization is not serialized across serverless instances");
+assert.ok(schema.includes("ROLLBACK"), "schema initialization rollback guard missing");
+
+const companiesRoute = read("app/api/companies/route.js");
+assert.ok(companiesRoute.includes("pulse_user_people"), "company people_count must be scoped to the authenticated user");
+assert.ok(companiesRoute.includes("peopleCountSql"), "company people_count scoping expression missing");
+
+const pageShell = read("app/components/PageShell.js");
+assert.ok(pageShell.includes('if (!payload.authenticated)'), "expired-session redirect missing from PageShell");
+assert.ok(pageShell.includes('window.location.href = "/auth"'), "PageShell login redirect missing");
 
 const worker = read("app/api/internal/sheets-sync/route.js");
 for (const marker of [
