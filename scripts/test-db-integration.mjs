@@ -25,7 +25,7 @@ try {
     "linkedin_profile_captures","linkedin_company_captures","linkedin_sheet_sync_queue",
     "linkedin_people","linkedin_companies","linkedin_current_roles","linkedin_devices",
     "linkedin_pairing_codes","linkedin_api_audit","pulse_users","pulse_sessions",
-    "pulse_user_people","pulse_user_companies"
+    "pulse_user_people","pulse_user_companies","pulse_schema_meta"
   ];
   const tables = await db.query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
@@ -160,6 +160,8 @@ try {
   await schemaC.ensureSchema(db);
   const stillThere = await db.query("SELECT count(*)::int AS n FROM public.linkedin_people");
   assert.equal(stillThere.rows[0].n, 2);
+  const schemaVersion = await db.query("SELECT version FROM public.pulse_schema_meta WHERE key='runtime'");
+  assert.equal(schemaVersion.rows[0].version, 4);
 
   console.log("Postgres integration QA: OK");
 } finally {
