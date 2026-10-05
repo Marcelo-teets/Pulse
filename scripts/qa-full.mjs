@@ -60,6 +60,8 @@ for (const marker of [
 ]) assert.ok(bg.includes(marker), `missing background safeguard: ${marker}`);
 assert.ok(bg.includes("actualUrl.origin!==expected.origin") && bg.includes("actualPath!==expectedPath"), "exact company page URL identity guard missing");
 assert.ok(bg.includes("nome canônico da empresa no LinkedIn"), "canonical company-name reconciliation missing");
+assert.ok(bg.includes("safeEndpoint"), "API endpoint allowlist guard missing");
+assert.ok(bg.includes('candidate.protocol==="https:"&&candidate.origin===expected.origin'), "API endpoint origin pinning missing");
 
 const api = read("functions/linkedin/index.ts");
 assert.ok(api.includes('const VERSION = "0.7.0"'));
@@ -84,6 +86,9 @@ assert.ok(dropDevice >= 0 && createDevice > dropDevice, "device view recreation 
 assert.ok(dropAudit >= 0 && createAudit > dropAudit, "audit view recreation is not idempotent");
 assert.ok(schema.includes("pg_advisory_xact_lock"), "schema initialization is not serialized across serverless instances");
 assert.ok(schema.includes("ROLLBACK"), "schema initialization rollback guard missing");
+assert.ok(schema.includes("SCHEMA_VERSION = 4"), "runtime schema version missing");
+assert.ok(schema.includes("pulse_schema_meta"), "runtime schema metadata table missing");
+assert.ok(schema.includes("Number(current.rows[0]?.version || 0) < SCHEMA_VERSION"), "runtime schema version gate missing");
 
 const signupRoute = read("app/api/auth/signup/route.js");
 assert.ok(!signupRoute.includes("masterCount"), "first signup must never auto-promote to master");
@@ -113,11 +118,16 @@ for (const marker of [
   "existingCaptureIds"
 ]) assert.ok(worker.includes(marker), `missing Sheets worker invariant: ${marker}`);
 
+const health = read("app/api/health/route.js");
+assert.ok((health.match(/status: 503/g) || []).length >= 2, "degraded health checks must return HTTP 503");
+
 const proxy = read("proxy.js");
 for (const path of ["/auth","/api/auth/login","/api/auth/signup","/api/health","/api/internal/sheets-sync"]) {
   assert.ok(proxy.includes(`"${path}"`), `public path missing: ${path}`);
 }
 assert.ok(proxy.includes('request.cookies.has("pulse_session")'));
+assert.ok(proxy.includes('const isApi = pathname.startsWith("/api/")'), "API pass-through guard missing");
+assert.ok(proxy.includes("if (isApi)"), "API routes must reach their own 401/403 handlers");
 
 const vercel = JSON.parse(read("vercel.json"));
 assert.ok(Array.isArray(vercel.crons) && vercel.crons.length === 1);
