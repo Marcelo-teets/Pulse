@@ -45,6 +45,15 @@
   };
 
   const validName = (v) => /\p{L}/u.test(v) && !/^(?:foto do perfil|profile photo|linkedin|perfil|profile|atividades|activity)$/i.test(v) && !/^(?:ver empresa|view company)/i.test(v);
+  const looksLikePersonName = (v) => {
+    const value = cleanName(v);
+    const words = value.split(/\s+/).filter(Boolean);
+    if (!validName(value) || words.length < 2 || words.length > 8) return false;
+    if (/[|@,:;]|\d/.test(value) || looksLikeLocation(value)) return false;
+    if (/(?:CEO|CFO|CTO|COO|Chief|Founder|Co-Founder|Director|Diretor|Diretora|Manager|Gerente|Head|Board|Advisor|Conselheir|Investidor|Investidora|President|Presidente|Partner|Sócio|Sócia|Executive|Executiv|Finance|Financial|Marketing|Sales|Operations|Technology|Engineer|Engenheir|Consultant|Consultor|Analyst|Analista|Specialist|Especialista|Vice President|\bVP\b)/i.test(value)) return false;
+    return words.every((word) => /^(?:[\p{L}][\p{L}'’.-]*|da|de|do|das|dos|e)$/u.test(word));
+  };
+
   const pageName = () => {
     const title = attr(document.querySelector('meta[property="og:title"],meta[name="title"]'), "content") || document.title;
     if (!/(?:\||[-–])\s+LinkedIn/i.test(title)) return "";
@@ -126,13 +135,14 @@
     ], "aria-label", top).replace(/^(?:Visualizar perfil de|View profile of|Perfil de|Profile of)\s+/i, ""));
     if (validName(aria)) return aria;
 
+    const firstRow = cleanName(topCardLines(top)[0] || "");
+    if (looksLikePersonName(firstRow)) return firstRow;
+
     const leafCandidates = [...top.querySelectorAll("h1,span,div")]
       .filter(el => !el.children?.length)
       .map(el => cleanName(txt(el)))
-      .filter(value => value.length >= 3 && value.length <= 90 && validName(value))
-      .filter(value => value.split(/\s+/).length >= 2 && value.split(/\s+/).length <= 8)
-      .filter(value => !/[|@]/.test(value) && !/,/.test(value))
-      .filter(value => !/(?:CEO|CFO|CTO|COO|Founder|Co-Founder|Diretor|Diretora|Director|Head|Board|Advisor|Conselheir|Investidor|Investidora|Dados de contato|Contact info|São Paulo|Brasil|Brazil|Região|University|Universidade|conexões|connections)/i.test(value));
+      .filter(looksLikePersonName)
+      .filter(value => !/(?:Dados de contato|Contact info|University|Universidade|conexões|connections)/i.test(value));
     return leafCandidates[0] || "";
   }
 
