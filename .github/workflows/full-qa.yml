@@ -1,0 +1,54 @@
+name: Pulse Full QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Structural QA
+        run: node scripts/qa-full.mjs
+
+      - name: Extension validation
+        run: node scripts/validate-linkedin-extension.mjs
+
+      - name: Extension syntax
+        run: |
+          node --check extensions/linkedin-capture/background.js
+          node --check extensions/linkedin-capture/content.js
+          node --check extensions/linkedin-capture/popup.js
+
+      - name: LinkedIn extractor regressions
+        run: node scripts/test-linkedin-extractor.mjs
+
+      - name: Next.js production build
+        run: npm run build
+
+      - name: Build extension artifact
+        run: node scripts/build-linkedin-extension.mjs
+
+      - name: Package extension
+        run: cd dist && zip -r pulse-linkedin-capture-v0.8.2.zip linkedin-capture
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pulse-full-qa-extension-v0.8.2
+          path: dist/pulse-linkedin-capture-v0.8.2.zip
