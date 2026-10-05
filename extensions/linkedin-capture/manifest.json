@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Pulse LinkedIn Capture",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Captura perfis e empresas do LinkedIn com pareamento por dispositivo, fila offline, idempotência e sincronização com o Pulse.",
   "minimum_chrome_version": "114",
-  "permissions": ["activeTab", "storage", "tabs", "alarms"],
+  "permissions": ["activeTab", "storage", "tabs", "alarms", "scripting"],
   "host_permissions": [
     "https://*.linkedin.com/*",
     "https://br-delicate-glade-b46j1hyc-linkedin.compute.c-6.us-east-2.aws.neon.tech/*"

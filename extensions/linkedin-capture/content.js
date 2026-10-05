@@ -1,4 +1,7 @@
 (() => {
+  if (window.__pulseLinkedinCaptureLoaded) return;
+  window.__pulseLinkedinCaptureLoaded = true;
+
   const norm = (v) => String(v || "").replace(/\s+/g, " ").trim();
   const txt = (el) => norm(el?.innerText || el?.textContent);
   const one = (selectors, root = document) => {
