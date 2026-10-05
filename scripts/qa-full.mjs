@@ -58,7 +58,8 @@ for (const marker of [
   "chrome.scripting.executeScript",
   "companyAboutUrl"
 ]) assert.ok(bg.includes(marker), `missing background safeguard: ${marker}`);
-assert.ok(bg.includes("difere da empresa atual do perfil"), "company mismatch must fail closed");
+assert.ok(bg.includes("actual.url?.startsWith"), "company page URL identity guard missing");
+assert.ok(bg.includes("nome canônico da empresa no LinkedIn"), "canonical company-name reconciliation missing");
 
 const api = read("functions/linkedin/index.ts");
 assert.ok(api.includes('const VERSION = "0.7.0"'));
