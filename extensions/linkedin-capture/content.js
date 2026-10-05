@@ -22,8 +22,8 @@
   const companyUrl = (href) => {
     try { const u = new URL(href, location.origin); const m = u.pathname.match(/^\/company\/[^/?#]+/i); return m ? `${u.origin}${m[0]}` : ""; } catch { return ""; }
   };
-  const lines = (el) => [...new Set(String(el?.innerText || "").split("\n").map(norm).filter(Boolean))];
-  const cleanCompany = (v) => norm(v).replace(/\s*(?:\|\s*)?LinkedIn\s*$/i, "").replace(/\s+logo$/i, "");
+  const lines = (el) => [...new Set(String(el?.innerText || el?.textContent || "").split("\n").map(norm).filter(Boolean))];
+  const cleanCompany = (v) => norm(v).replace(/^(?:ver empresa|view company)\s*:\s*/i, "").replace(/\s*(?:\|\s*)?LinkedIn\s*$/i, "").replace(/\s+logo$/i, "");
   const cleanName = (v) => norm(v).replace(/\s*[·•]\s*\d+(?:º|st|nd|rd|th)?\s*$/i, "").replace(/\s+(?:visualizar perfil|view profile).*$/i, "");
   const cleanTitle = (v) => norm(v).replace(/\s+at\s+.+$/i, "").replace(/\s+(?:na|no|em)\s+.+$/i, "");
   const isNoise = (v) => /^(contato|contact info|conectar|connect|seguir|follow|enviar mensagem|message|mais|more|verificado|verified|grau|degree|seguidores|followers|conexões|connections)$/i.test(norm(v));
@@ -36,10 +36,22 @@
     return null;
   };
 
+  const validName = (v) => /\p{L}/u.test(v) && !/^(?:foto do perfil|profile photo|linkedin|perfil|profile|atividades|activity)$/i.test(v) && !/^(?:ver empresa|view company)/i.test(v);
   function profileTopCard() {
-    const h1 = document.querySelector("main h1") || document.querySelector("h1");
-    if (!h1) return document.querySelector("main section") || document.querySelector("main") || document;
-    return h1.closest("section") || h1.closest('[data-view-name="profile-card"]') || h1.parentElement?.closest("section") || h1.parentElement || document;
+    const main = document.querySelector("main");
+    if (!main) throw new Error("O cabeçalho do perfil não carregou. Aguarde o LinkedIn e tente novamente.");
+    const name = [...main.querySelectorAll(".text-heading-xlarge, h1, [data-anonymize='person-name']")]
+      .find(el => validName(cleanName(txt(el))) && !el.closest("nav,aside"));
+    if (!name) throw new Error("Não encontrei o nome no cabeçalho do perfil. Aguarde a página carregar.");
+    // Never widen this scope to main: main also contains Activity and unrelated company links.
+    let card = name.closest("section,[data-view-name='profile-card']");
+    if (!card) {
+      card = name;
+      while (card.parentElement && card.parentElement !== main && card.parentElement.parentElement !== main) card = card.parentElement;
+    }
+    if (!card || /(?:Atividades|Activity)[\s\S]*(?:Experiência|Experience)/i.test(txt(card)))
+      throw new Error("Não foi possível isolar o cabeçalho do perfil.");
+    return card;
   }
 
   function topCardLines(top) {
@@ -53,25 +65,21 @@
       "h1",
       '[data-anonymize="person-name"]'
     ], top));
-    if (direct) return direct;
+    if (validName(direct)) return direct;
     const imageAlt = cleanName(oneAttr([
       'img[alt*="Foto do perfil"]',
       'img[alt*="profile photo"]'
     ], "alt", top).replace(/^(?:Foto do perfil de|Profile photo of)\s+/i, ""));
-    if (imageAlt) return imageAlt;
+    if (validName(imageAlt)) return imageAlt;
     const aria = cleanName(oneAttr([
       '[aria-label*="perfil"]',
       '[aria-label*="profile"]'
     ], "aria-label", top).replace(/^(?:Visualizar perfil de|View profile of|Perfil de|Profile of)\s+/i, ""));
-    if (aria) return aria;
+    if (validName(aria)) return aria;
     const meta = cleanName(attr(document.querySelector('meta[property="og:title"],meta[name="title"]'), "content").replace(/\s+\|\s+LinkedIn.*$/i, ""));
-    if (meta) return meta;
+    if (validName(meta)) return meta;
     const title = cleanName((document.title.match(/^(.+?)\s+\|/) || [])[1]);
-    if (title && !/^linkedin$/i.test(title)) return title;
-    try {
-      const slug = new URL(location.href).pathname.match(/^\/in\/([^/?#]+)/i)?.[1] || "";
-      return slug ? slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "";
-    } catch { return ""; }
+    return validName(title) ? title : "";
   }
 
   function profileLocation(top) {
@@ -106,7 +114,7 @@
         if (value && value !== fullName && value !== location && !isNoise(value)) return value;
       }
     }
-    return topCardLines(top).find((x) => x !== fullName && x !== location && !/(followers|seguidores|connections|conexões)/i.test(x)) || "";
+    return "";
   }
 
   function topCardCompany(top, headline) {
@@ -114,7 +122,7 @@
     for (const link of links) {
       const company = cleanCompany((txt(link) || attr(link, "aria-label") || attr(link.querySelector("img"), "alt")).split(" · ")[0]);
       const url = companyUrl(link.href);
-      if (company && url) return { current_title: headline, current_company: company, company_url: url };
+      if (company && url && !/^ver empresa$/i.test(company)) return { current_title: headline, current_company: company, company_url: url };
     }
     const patterns = [/^(.+?)\s+(?:at|@)\s+(.+)$/i, /^(.+?)\s+(?:na|no|em)\s+(.+)$/i];
     for (const p of patterns) {
@@ -125,7 +133,7 @@
   }
 
   function currentRole(headline) {
-    const exp = section(["Experiência", "Experience"]);
+    const exp = document.querySelector("main #experience")?.closest("section") || section(["Experiência", "Experience"]);
     if (exp) {
       const companyLinks = [...exp.querySelectorAll('a[href*="/company/"]')];
       for (const link of companyLinks) {
@@ -133,11 +141,11 @@
         if (!card) continue;
         const cardLines = lines(card).slice(0, 16);
         const body = cardLines.join(" ");
-        const isCurrent = /(presente|present|o momento|atual)/i.test(body);
-        if (!isCurrent && companyLinks.indexOf(link) > 0) continue;
+        const isCurrent = /(?:^|\s)(?:presente|present|o momento|atual)(?:\s|$)/i.test(body);
+        if (!isCurrent) continue;
         const company = cleanCompany((txt(link) || attr(link, "aria-label") || attr(link.querySelector("img"), "alt")).split(" · ")[0]);
         const likelyTitle = cleanTitle(cardLines.find((x) => x !== company && !/(presente|present|\b20\d{2}\b|tempo integral|full[- ]?time|localidade|location|meses|anos|yrs|mos)/i.test(x)) || "");
-        if (company) return { current_title: likelyTitle || headline, current_company: company, company_url: companyUrl(link.href) };
+        if (company && companyUrl(link.href)) return { current_title: likelyTitle || headline, current_company: company, company_url: companyUrl(link.href) };
       }
     }
     const patterns = [/^(.+?)\s+(?:at|@)\s+(.+)$/i, /^(.+?)\s+(?:na|no|em)\s+(.+)$/i];
