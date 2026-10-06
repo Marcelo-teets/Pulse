@@ -32,7 +32,7 @@ function tagged(tag, text, children = [], attrs = {}, classes = []) {
   if (tag === "section") for (const child of children) child.section = n;
   return n;
 }
-function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, school = "", includeExperience = false }) {
+function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, school = "", includeExperience = false, messageType = "EXTRACT_PROFILE", expectedCompany = "" }) {
   const nameNode = tagged("div", name, [], {}, modern ? [] : ["text-heading-xlarge"]);
   const header = tagged("section", "", [
     tagged("h1", "Foto do perfil"),
@@ -65,7 +65,8 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
     URL, Date, chrome:{runtime:{onMessage:{addListener(fn){handler=fn;}}}}, window:{}};
   vm.runInNewContext(script, context);
   let response;
-  handler({type:"EXTRACT_PROFILE"}, {}, value => response = value);
+  const message = messageType === "RESOLVE_COMPANY_LINK" ? {type:messageType, expectedCompany, headline:title} : {type:messageType};
+  handler(message, {}, value => response = value);
   return response;
 }
 const guilherme = capture({name:"Guilherme Rachid",title:"CEO & Founder",place:"São José dos Campos, São Paulo, Brasil",company:"Ayude",slug:"ayude",unrelated:"PIT – Parque de Inovação"});
@@ -126,4 +127,9 @@ assert.equal(danielHrefLess.profile.full_name, "Daniel Brandão");
 assert.equal(danielHrefLess.profile.current_company, "VitalCura");
 assert.equal(danielHrefLess.profile._company_url, "");
 
-console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, weak-single-signal, href-less-current-company, missing-name/title/company, generic-title and missing-location guards OK");
+const danielResolved = capture({name:"Daniel Brandão",title:"Founder | CEO | Banker | Board Member | CFO | Cyclist",place:"Brasil",company:"VitalCura",slug:"vitalcura",unrelated:"Outra empresa",modern:true,companyAsButton:true,school:"Universidade de São Paulo",includeExperience:true,messageType:"RESOLVE_COMPANY_LINK",expectedCompany:"VitalCura"});
+assert.equal(danielResolved.ok, true);
+assert.equal(danielResolved.role.current_company, "VitalCura");
+assert.equal(danielResolved.role.company_url, "https://www.linkedin.com/company/vitalcura");
+
+console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, weak-single-signal, href-less-current-company + experience-link-resolution, missing-name/title/company, generic-title and missing-location guards OK");
