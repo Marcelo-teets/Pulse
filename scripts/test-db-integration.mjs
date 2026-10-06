@@ -15,6 +15,7 @@ try {
   await apply("migrations/001_linkedin_capture.sql");
   await apply("migrations/002_linkedin_capture_hardening.sql");
   await apply("migrations/003_multi_user_auth.sql");
+  await apply("migrations/004_company_linkedin_identity.sql");
 
   // Simulate separate serverless cold starts initializing the same schema concurrently.
   const schemaA = await import("../lib/schema.js?instance=a");
@@ -161,7 +162,11 @@ try {
   const stillThere = await db.query("SELECT count(*)::int AS n FROM public.linkedin_people");
   assert.equal(stillThere.rows[0].n, 2);
   const schemaVersion = await db.query("SELECT version FROM public.pulse_schema_meta WHERE key='runtime'");
-  assert.equal(schemaVersion.rows[0].version, 4);
+  assert.equal(schemaVersion.rows[0].version, 5);
+  const companyIdentityColumns = await db.query(
+    "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND column_name='linkedin_url' AND table_name IN ('linkedin_company_captures','linkedin_companies') ORDER BY table_name"
+  );
+  assert.equal(companyIdentityColumns.rowCount, 2);
 
   console.log("Postgres integration QA: OK");
 } finally {
