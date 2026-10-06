@@ -124,7 +124,7 @@ export default function OperationsPage() {
                     <td>{fmt(device.token_expires_at)}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="5"><div className="empty-state"><div className="empty-icon">◎</div><b>Nenhum dispositivo pareado</b><p>O primeiro Chrome v0.8.7 aparecerá aqui após o pareamento.</p></div></td></tr>
+                  <tr><td colSpan="5"><div className="empty-state"><div className="empty-icon">◎</div><b>Nenhum dispositivo pareado</b><p>O primeiro Chrome v0.8.8 aparecerá aqui após o pareamento.</p></div></td></tr>
                 )}
               </tbody>
             </table>
