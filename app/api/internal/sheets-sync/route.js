@@ -220,12 +220,14 @@ export async function GET(request) {
   }
 
   const ids = await claimBatch(database, 20);
-  if (!ids.length) {
-    return Response.json({ ok: true, processed: 0, message: "queue empty" });
-  }
 
   try {
     const token = await googleAccessToken();
+    if (!ids.length) {
+      await updateOperationalMetrics(database, token);
+      return Response.json({ ok: true, processed: 0, message: "queue empty", metricsUpdated: true });
+    }
+
     const payloads = await loadPayloads(database, ids);
 
     const [peopleSheet, companiesSheet, capturesSheet] = await Promise.all([
