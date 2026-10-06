@@ -19,7 +19,8 @@ const critical = [
   "lib/schema.js",
   "proxy.js",
   "vercel.json",
-  "scripts/build-neon-linkedin-function.mjs"
+  "scripts/build-neon-linkedin-function.mjs",
+  "migrations/004_company_linkedin_identity.sql"
 ];
 critical.forEach(exists);
 
@@ -97,6 +98,9 @@ assert.ok(api.includes("readJsonLimited(request)"), "capture payload limit missi
 assert.ok(api.includes("used_by_device_id=$1"), "historical pairing ownership recovery missing");
 assert.ok(api.includes('reason: "device_unowned"'), "unowned device fail-closed reason missing");
 assert.ok(api.includes("owner_user_id=$2::bigint"), "device ownership self-heal update missing");
+assert.ok(api.includes("normalizeLinkedinCompanyUrl"), "stable LinkedIn company URL validation missing");
+assert.ok(api.includes('linkedin_url IS NULL'), "legacy company identity reconciliation missing");
+assert.ok(api.includes('linkedin:'), "LinkedIn company URL must drive canonical identity");
 
 const schema = read("lib/schema.js");
 const dropDevice = schema.indexOf("DROP VIEW IF EXISTS public.linkedin_device_status");
@@ -110,6 +114,7 @@ assert.ok(schema.includes("ROLLBACK"), "schema initialization rollback guard mis
 assert.ok(schema.includes("SCHEMA_VERSION = 5"), "runtime schema version missing");
 assert.ok(schema.includes("pulse_schema_meta"), "runtime schema metadata table missing");
 assert.ok(schema.includes("Number(current.rows[0]?.version || 0) < SCHEMA_VERSION"), "runtime schema version gate missing");
+assert.ok(schema.includes("ux_linkedin_companies_linkedin_url"), "stable company LinkedIn URL unique index missing");
 
 const authLib = read("lib/auth.js");
 assert.ok(authLib.includes("DELETE FROM public.pulse_sessions WHERE expires_at <= NOW() OR revoked_at IS NOT NULL"), "stale session cleanup missing");
@@ -151,9 +156,11 @@ for (const marker of [
   "LINKEDIN_API_VERSION",
   "NOW() - INTERVAL '15 minutes'",
   'getValues(token, "Pessoas!A2:H")',
-  'getValues(token, "Empresas!A2:G")',
+  'getValues(token, "Empresas!A2:H")',
   'getValues(token, "Capturas!A2:A")',
   "existingCaptureIds",
+  "company_linkedin_url",
+  "companyRowByName",
   'const LINKEDIN_API_VERSION = "0.7.2"',
   "metricsUpdated: true"
 ]) assert.ok(worker.includes(marker), `missing Sheets worker invariant: ${marker}`);
@@ -187,6 +194,8 @@ assert.ok(neonBuilder.includes("pulse-linkedin-api-v0.7.2.zip"), "Neon function 
 const fullQa = read(".github/workflows/full-qa.yml");
 assert.ok(fullQa.includes("Bundle Neon LinkedIn Function"), "Full QA must compile Neon Function");
 assert.ok(fullQa.includes("pulse-linkedin-api-v0.7.2"), "Full QA must publish Neon Function artifact");
+assert.ok(fullQa.includes("path: dist/linkedin-capture/**"), "extension artifact must expose manifest at archive root");
+assert.ok(!fullQa.includes("zip -r pulse-linkedin-capture"), "extension artifact must not be nested in a second ZIP");
 
 const readme = read("README.md");
 assert.ok(readme.includes("1x por dia às 09:00 UTC"), "README cron schedule is stale");
