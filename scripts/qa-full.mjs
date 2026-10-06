@@ -42,7 +42,9 @@ assert.ok(content.includes("Atividades|Activity|Experiência|Experience"), "top-
 assert.ok(content.includes("CEO|CFO|CTO|COO"), "job-title-as-name guard missing");
 assert.ok(content.includes('if (!full_name) throw new Error'), "content extractor must fail closed without a name");
 assert.ok(content.includes('if (!headline) throw new Error'), "content extractor must fail closed without a headline");
-assert.ok(content.includes('if (!role.current_company || !role.company_url)'), "content extractor must fail closed without company evidence");
+assert.ok(content.includes('if (!role.current_company) throw new Error'), "content extractor must fail closed without company name evidence");
+assert.ok(content.includes("RESOLVE_COMPANY_LINK"), "href-less company resolver message missing");
+assert.ok(content.includes("function resolveCompanyLink"), "href-less company resolver missing");
 
 const bg = read("extensions/linkedin-capture/background.js");
 assert.ok(!bg.includes("nameFromTitle"), "unsafe tab-title name fallback must not exist");
@@ -54,7 +56,9 @@ for (const marker of [
   "clearDeviceAuth",
   "RETRY_OUTBOX",
   "x-pulse-device-token",
-  "if(!person.full_name||!person.current_title||!person.current_company||!companyUrl)",
+  "if(!person.full_name||!person.current_title||!person.current_company)",
+  "resolveCompanyLinkFromProfile",
+  "if(!companyUrl)throw new Error",
   "chrome.scripting.executeScript",
   "companyAboutUrl"
 ]) assert.ok(bg.includes(marker), `missing background safeguard: ${marker}`);
