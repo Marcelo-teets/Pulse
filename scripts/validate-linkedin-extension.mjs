@@ -7,7 +7,7 @@ for (const f of required) {
 }
 const manifest = JSON.parse(fs.readFileSync(`${root}/manifest.json`, "utf8"));
 if (manifest.manifest_version !== 3) throw new Error("Manifest V3 required");
-if (manifest.version !== "0.8.5") throw new Error("Expected v0.8.5");
+if (manifest.version !== "0.8.6") throw new Error("Expected v0.8.6");
 const bg = fs.readFileSync(`${root}/background.js`, "utf8");
 for (const forbidden of ["BUILD_API_TOKEN","__PULSE_EXTENSION_TOKEN__","x-extension-token"]) {
   if (bg.includes(forbidden)) throw new Error(`Static legacy credential marker found: ${forbidden}`);
@@ -23,5 +23,7 @@ const content = fs.readFileSync(`${root}/content.js`, "utf8");
 if (!content.includes("__pulseLinkedinCaptureLoaded === CONTENT_VERSION")) throw new Error("Version-aware content-script reload guard missing");
 if (!content.includes('if (!full_name) throw new Error')) throw new Error("Fail-closed missing-name guard missing");
 if (!content.includes('if (!headline) throw new Error')) throw new Error("Fail-closed headline guard missing");
-if (!content.includes('if (!role.current_company || !role.company_url)')) throw new Error("Fail-closed company guard missing");
+if (!content.includes('if (!role.current_company) throw new Error')) throw new Error("Fail-closed company-name guard missing");
+if (!content.includes("RESOLVE_COMPANY_LINK") || !content.includes("resolveCompanyLink")) throw new Error("Href-less company resolver missing");
+if (!bg.includes("resolveCompanyLinkFromProfile") || !bg.includes("Encontrei a empresa atual no perfil, mas não consegui resolver")) throw new Error("Background Experience fallback missing");
 console.log("LinkedIn extension validation: OK");

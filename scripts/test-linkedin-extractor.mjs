@@ -11,8 +11,9 @@ function node(text = "", children = [], attributes = {}) {
       return this.children.flatMap(child => [child, ...child.querySelectorAll(selector)])
         .filter(child => selector.split(",").some(s => {
           s = s.trim();
-          if (s === "h1" || s === "h2") return child.tag === s;
-          if (s === "section" || s === "span" || s === "div") return child.tag === s;
+          if (s === "h1" || s === "h2" || s === "h3") return child.tag === s;
+          if (s === "section" || s === "span" || s === "div" || s === "button" || s === "a") return child.tag === s;
+          if (s === '[role="button"]') return child.attributes?.role === "button";
           if (s.startsWith(".text-heading-xlarge")) return child.classes?.includes("text-heading-xlarge");
           if (s.includes("/company/")) return child.tag === "a" && child.href?.includes("/company/");
           if (s.includes("text-body-medium")) return child.classes?.includes("text-body-medium");
@@ -21,7 +22,7 @@ function node(text = "", children = [], attributes = {}) {
         }));
     },
     querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
-    closest(selector) { return selector.includes("section") ? this.section || null : null; }
+    closest(selector) { if (selector.includes("section")) return this.tag === "section" ? this : this.section || null; if (selector.includes("li")) return this.tag === "li" ? this : null; return null; }
   };
   for (const child of children) { child.parentElement = element; child.section = element.tag === "section" ? element : element.section; }
   return element;
@@ -31,7 +32,7 @@ function tagged(tag, text, children = [], attrs = {}, classes = []) {
   if (tag === "section") for (const child of children) child.section = n;
   return n;
 }
-function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false }) {
+function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, school = "", includeExperience = false, messageType = "EXTRACT_PROFILE", expectedCompany = "" }) {
   const nameNode = tagged("div", name, [], {}, modern ? [] : ["text-heading-xlarge"]);
   const header = tagged("section", "", [
     tagged("h1", "Foto do perfil"),
@@ -39,12 +40,21 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
     tagged("div", title, [], {}, modern ? [] : ["text-body-medium"]),
     tagged("span", place, [], {}, modern ? [] : ["text-body-small"]),
     ...includeContact ? [tagged("span", "Dados de contato")] : [],
-    ...omitCompany ? [] : [tagged("a", `Ver empresa: ${company}`, [], {href:`https://www.linkedin.com/company/${slug}/`})]
+    ...omitCompany ? [] : [companyAsButton
+      ? tagged("button", company, [], {role:"button"})
+      : tagged("a", `Ver empresa: ${company}`, [], {href:`https://www.linkedin.com/company/${slug}/`})],
+    ...school ? [tagged("button", school, [], {role:"button"})] : []
   ]);
   header.innerText = `${name}\n${title}\n${place}\n${includeContact ? "Dados de contato\n" : ""}${omitCompany ? "" : company}`;
   const activity = tagged("section", "Atividades", [tagged("a", unrelated, [], {href:"https://www.linkedin.com/company/unrelated/"})]);
+  const experience = tagged("section", "Experiência", [
+    tagged("h2", "Experiência"),
+    tagged("li", `${title}\n${company}\njan de 2020 - Presente`, [
+      tagged("a", company, [], {href:`https://www.linkedin.com/company/${slug}/`})
+    ])
+  ]);
   const noise = tagged("section", "Experimente o Premium por 30 dias", [tagged("div", "Tenha acesso a recursos exclusivos")]);
-  const main = tagged("main", "", [...prependNoise ? [noise] : [], header, activity]);
+  const main = tagged("main", "", [...prependNoise ? [noise] : [], header, activity, ...includeExperience ? [experience] : []]);
   const document = {
     title: pageTitle === null ? `${name} | LinkedIn` : pageTitle,
     querySelector(s) { if(s === "main") return main; if(s === 'link[rel="canonical"]') return {href:"https://www.linkedin.com/in/test/"}; return null; },
@@ -55,7 +65,8 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
     URL, Date, chrome:{runtime:{onMessage:{addListener(fn){handler=fn;}}}}, window:{}};
   vm.runInNewContext(script, context);
   let response;
-  handler({type:"EXTRACT_PROFILE"}, {}, value => response = value);
+  const message = messageType === "RESOLVE_COMPANY_LINK" ? {type:messageType, expectedCompany, headline:title} : {type:messageType};
+  handler(message, {}, value => response = value);
   return response;
 }
 const guilherme = capture({name:"Guilherme Rachid",title:"CEO & Founder",place:"São José dos Campos, São Paulo, Brasil",company:"Ayude",slug:"ayude",unrelated:"PIT – Parque de Inovação"});
@@ -110,4 +121,15 @@ assert.equal(missingCompanyEvidence.ok, false);
 const weakSingleSignal = capture({name:"Daniela Batista dos Santos",title:"CFO",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,includeContact:false,pageTitle:"LinkedIn"});
 assert.equal(weakSingleSignal.ok, false);
 
-console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, weak-single-signal, missing-name/title/company, generic-title and missing-location guards OK");
+const danielHrefLess = capture({name:"Daniel Brandão",title:"Founder | CEO | Banker | Board Member | CFO | Cyclist",place:"Brasil",company:"VitalCura",slug:"vitalcura",unrelated:"Outra empresa",modern:true,companyAsButton:true,school:"Universidade de São Paulo",includeExperience:true});
+assert.equal(danielHrefLess.ok, true);
+assert.equal(danielHrefLess.profile.full_name, "Daniel Brandão");
+assert.equal(danielHrefLess.profile.current_company, "VitalCura");
+assert.equal(danielHrefLess.profile._company_url, "");
+
+const danielResolved = capture({name:"Daniel Brandão",title:"Founder | CEO | Banker | Board Member | CFO | Cyclist",place:"Brasil",company:"VitalCura",slug:"vitalcura",unrelated:"Outra empresa",modern:true,companyAsButton:true,school:"Universidade de São Paulo",includeExperience:true,messageType:"RESOLVE_COMPANY_LINK",expectedCompany:"VitalCura"});
+assert.equal(danielResolved.ok, true);
+assert.equal(danielResolved.role.current_company, "VitalCura");
+assert.equal(danielResolved.role.company_url, "https://www.linkedin.com/company/vitalcura");
+
+console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, weak-single-signal, href-less-current-company + experience-link-resolution, missing-name/title/company, generic-title and missing-location guards OK");
