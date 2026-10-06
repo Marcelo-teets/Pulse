@@ -7,16 +7,12 @@ attachDatabasePool(pool);
 
 const VERSION = "0.7.2";
 const MAX_BODY_BYTES = 180_000;
-const LEGACY_TOKENS = [
-  process.env.PULSE_EXTENSION_TOKEN_LEGACY_CURRENT,
-  process.env.PULSE_EXTENSION_TOKEN_LEGACY_PREVIOUS,
-].filter(Boolean) as string[];
-const LEGACY_UNTIL = Date.parse(process.env.PULSE_LEGACY_AUTH_UNTIL || "1970-01-01T00:00:00Z");
+const MIN_EXTENSION_VERSION = "0.8.9";
 
 const headers = {
   "content-type": "application/json; charset=utf-8",
   "access-control-allow-origin": "*",
-  "access-control-allow-headers": "content-type, x-extension-token, x-pulse-device-token, x-pulse-extension-version",
+  "access-control-allow-headers": "content-type, x-pulse-device-token, x-pulse-extension-version",
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "cache-control": "no-store",
 };
@@ -108,9 +104,26 @@ async function audit(
   }
 }
 
+function versionAtLeast(value: string | null, minimum: string) {
+  const parse = (input: string | null) => String(input || "").split(".").map((part) => Number(part));
+  const a = parse(value);
+  const b = parse(minimum);
+  if (a.some((n) => !Number.isInteger(n) || n < 0) || a.length < 3) return false;
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const av = a[i] || 0;
+    const bv = b[i] || 0;
+    if (av !== bv) return av > bv;
+  }
+  return true;
+}
+
 async function authenticate(request: Request) {
   const extensionVersion = clean(request.headers.get("x-pulse-extension-version"), 50);
   const deviceToken = clean(request.headers.get("x-pulse-device-token"), 500);
+
+  if (!versionAtLeast(extensionVersion, MIN_EXTENSION_VERSION)) {
+    return { ok: false, deviceId: null, ownerUserId: null, mode: null, extensionVersion, reason: "extension_outdated" };
+  }
 
   if (deviceToken) {
     const rows = await q<{ device_id: string; owner_user_id: string | null }>(
@@ -150,11 +163,6 @@ async function authenticate(request: Request) {
       );
       return { ok: true, deviceId: rows[0].device_id, ownerUserId, mode: "device", extensionVersion };
     }
-  }
-
-  const legacy = clean(request.headers.get("x-extension-token"), 500);
-  if (legacy && Date.now() <= LEGACY_UNTIL && LEGACY_TOKENS.includes(legacy)) {
-    return { ok: true, deviceId: "legacy-v06", ownerUserId: null, mode: "legacy", extensionVersion };
   }
 
   return { ok: false, deviceId: null, ownerUserId: null, mode: null, extensionVersion };
@@ -431,6 +439,9 @@ export default {
         const deviceName = clean(body?.device_name, 200) || "Chrome";
         const extensionVersion = clean(body?.extension_version, 50) || VERSION;
         if (!code) return json({ error: "pairing_code é obrigatório" }, 400);
+        if (!versionAtLeast(extensionVersion, MIN_EXTENSION_VERSION)) {
+          return json({ error: `Atualize a extensão para v${MIN_EXTENSION_VERSION} ou superior.` }, 426);
+        }
 
         const client = await pool.connect();
         const deviceId = randomUUID();
@@ -439,7 +450,7 @@ export default {
         try {
           await client.query("BEGIN");
           const valid = await q<{ owner_user_id: string | null }>(
-            "SELECT owner_user_id::text FROM public.linkedin_pairing_codes WHERE code_hash=$1 AND used_at IS NULL AND expires_at>NOW() FOR UPDATE",
+            "SELECT owner_user_id::text FROM public.linkedin_pairing_codes WHERE code_hash=$1 AND used_at IS NULL AND expires_at>NOW() AND owner_user_id IS NOT NULL FOR UPDATE",
             [sha(code)],
             client
           );
@@ -491,8 +502,12 @@ export default {
           extensionVersion: auth.extensionVersion,
           details: { path, reason: (auth as any).reason || "invalid_credentials" },
         });
+        const reason = (auth as any).reason;
+        if (reason === "extension_outdated") {
+          return json({ error: `Atualize a extensão para v${MIN_EXTENSION_VERSION} ou superior.` }, 426);
+        }
         return json(
-          { error: (auth as any).reason === "device_unowned" ? "Dispositivo precisa ser pareado novamente." : "Unauthorized" },
+          { error: reason === "device_unowned" ? "Dispositivo precisa ser pareado novamente." : "Unauthorized" },
           401
         );
       }
