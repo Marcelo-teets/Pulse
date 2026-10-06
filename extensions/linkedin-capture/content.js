@@ -395,15 +395,40 @@
     return { value: "", root: null };
   }
 
+  function externalWebsite(href) {
+    try {
+      const u = new URL(href, location.origin);
+      if (!/(^|\.)linkedin\.com$/i.test(u.hostname)) {
+        return /^https?:$/i.test(u.protocol) ? u.toString() : "";
+      }
+      if (/^\/redir\/redirect\/?$/i.test(u.pathname)) {
+        const target = u.searchParams.get("url");
+        if (!target) return "";
+        const decoded = new URL(target);
+        return /^https?:$/i.test(decoded.protocol) ? decoded.toString() : "";
+      }
+    } catch {}
+    return "";
+  }
+
   function website(ld, root) {
-    if (ld?.url && !/linkedin\.com/i.test(ld.url)) return String(ld.url);
+    const ldUrl = externalWebsite(ld?.url || "");
+    if (ldUrl) return ldUrl;
+
     const lab = labelValue(["Website", "Site"], root);
-    const link = lab.root?.querySelector('a[href^="http"]');
-    if (link?.href && !/linkedin\.com/i.test(link.href)) return link.href;
-    for (const a of root.querySelectorAll('a[href^="http"]')) {
-      if (!/linkedin\.com/i.test(a.href) && /(website|site|visitar|visit)/i.test(txt(a))) return a.href;
+    for (const a of lab.root?.querySelectorAll?.("a[href]") || []) {
+      const resolved = externalWebsite(a.href || attr(a, "href"));
+      if (resolved) return resolved;
     }
-    return /^https?:\/\//i.test(lab.value) ? lab.value : "";
+    for (const a of root.querySelectorAll("a[href]")) {
+      const resolved = externalWebsite(a.href || attr(a, "href"));
+      if (resolved && /(website|site|visitar|visit|abrir|open)/i.test(txt(a) + " " + attr(a, "aria-label"))) return resolved;
+    }
+
+    const raw = norm(lab.value);
+    if (/^https?:\/\//i.test(raw)) return externalWebsite(raw);
+    if (/^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}(?:\/.*)?$/i.test(raw)) return externalWebsite("https://" + raw);
+    return "";
   }
 
   function employeeCount(root) {
@@ -423,11 +448,19 @@
       .map(txt)
       .filter((v) => v.length >= 40 && !/(followers|seguidores|employees|funcionários)/i.test(v));
     if (vals[0]) return vals[0];
+
+    const lineFallback = lines(root)
+      .filter((v) => v.length >= 40 && v.length <= 5000)
+      .filter((v) => !/(followers|seguidores|employees|funcionários|publicações|posts|vagas|jobs)/i.test(v))
+      .sort((a, b) => b.length - a.length)[0];
+    if (lineFallback) return lineFallback;
+
     if (norm(ld?.description).length >= 40) return norm(ld.description);
     return "";
   }
 
   function extractCompany() {
+    const main = document.querySelector("main") || document.body;
     const root = companyScope();
     const visibleName = cleanCompany(one(["main h1",".org-top-card-summary__title","h1"]));
     const ld = jsonLdOrganization();
@@ -439,7 +472,7 @@
       company_name,
       description: description(trustedLd, root),
       website: website(trustedLd, root),
-      employee_count: employeeCount(root),
+      employee_count: employeeCount(main) || employeeCount(root),
       captured_at: new Date().toISOString()
     };
   }
