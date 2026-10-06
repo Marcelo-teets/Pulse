@@ -21,7 +21,11 @@ export default function UsuariosPage() {
       window.location.href = "/auth";
       return;
     }
-    const payload = await response.json();
+    if (response.status === 403) {
+      window.location.href = "/";
+      return;
+    }
+    const payload = await response.json().catch(() => ({}));
     setUsers(payload.users || []);
     setLoading(false);
   }
