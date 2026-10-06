@@ -208,6 +208,14 @@
     return "";
   }
 
+  const companyKey = (v) => cleanCompany(v).toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const likelyAffiliationName = (v) => {
+    const value = cleanCompany(v);
+    if (!value || value.length < 2 || value.length > 120) return "";
+    if (/^(?:seguir|follow|conectar|connect|enviar mensagem|message|mais|more|dados de contato|contact info)$/i.test(value)) return "";
+    if (/\b(?:seguidores|followers|conexões|connections)\b/i.test(value)) return "";
+    return value;
+  };
   function topCardCompany(top, headline) {
     const links = [...top.querySelectorAll('a[href*="/company/"]')];
     for (const link of links) {
@@ -215,12 +223,45 @@
       const url = companyUrl(link.href);
       if (company && url && !/^ver empresa$/i.test(company)) return { current_title: headline, current_company: company, company_url: url };
     }
+
+    // LinkedIn's 2026 top card can render the current employer as a button/chip
+    // without an href. Preserve the visible employer name and resolve its URL
+    // from Experience in a background profile tab before saving.
+    for (const el of top.querySelectorAll('a,button,[role="button"]')) {
+      const href = attr(el, "href");
+      if (/\/school\//i.test(href)) continue;
+      const raw = txt(el) || attr(el, "aria-label") || attr(el.querySelector?.("img"), "alt");
+      const company = likelyAffiliationName(raw);
+      if (!company) continue;
+      if (companyKey(company) === companyKey(headline)) continue;
+      if (/^(?:foto do perfil|profile photo)/i.test(company)) continue;
+      const url = companyUrl(href);
+      return { current_title: headline, current_company: company, company_url: url };
+    }
+
     const patterns = [/^(.+?)\s+(?:at|@)\s+(.+)$/i, /^(.+?)\s+(?:na|no|em)\s+(.+)$/i];
     for (const p of patterns) {
       const m = headline.match(p);
       if (m) return { current_title: norm(m[1]), current_company: cleanCompany(m[2]), company_url: "" };
     }
     return null;
+  }
+
+  function resolveCompanyLink(expectedCompany, headline = "") {
+    const expectedKey = companyKey(expectedCompany);
+    if (!expectedKey) return { current_title: headline, current_company: expectedCompany || "", company_url: "" };
+
+    const expRole = currentRole(headline);
+    if (expRole?.company_url && companyKey(expRole.current_company) === expectedKey) return expRole;
+
+    for (const link of document.querySelectorAll('main a[href*="/company/"],a[href*="/company/"]')) {
+      const raw = txt(link) || attr(link, "aria-label") || attr(link.querySelector?.("img"), "alt");
+      const company = cleanCompany(String(raw || "").split(" · ")[0]);
+      if (companyKey(company) === expectedKey) {
+        return { current_title: expRole?.current_title || headline, current_company: company || expectedCompany, company_url: companyUrl(link.href) };
+      }
+    }
+    return { current_title: expRole?.current_title || headline, current_company: expectedCompany, company_url: "" };
   }
 
   function currentRole(headline) {
@@ -254,7 +295,7 @@
     const role = topCardCompany(top, headline) || currentRole(headline);
     if (!full_name) throw new Error("Não encontrei o nome no cabeçalho do perfil. Aguarde a página carregar.");
     if (!headline) throw new Error("Não encontrei o cargo/headline no cabeçalho do perfil. Aguarde a página carregar.");
-    if (!role.current_company || !role.company_url) throw new Error("Não encontrei a empresa atual com link válido no perfil.");
+    if (!role.current_company) throw new Error("Não encontrei a empresa atual no perfil.");
     const captured_at = new Date().toISOString();
     const base = { full_name, linkedin_url: canonical(), location, current_title: role.current_title, current_company: role.current_company, captured_at };
     return { ...base, raw_json: { ...base }, _company_url: role.company_url };
@@ -342,6 +383,7 @@
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     try {
       if (message?.type === "EXTRACT_PROFILE") sendResponse({ ok: true, profile: extractProfile() });
+      else if (message?.type === "RESOLVE_COMPANY_LINK") sendResponse({ ok: true, role: resolveCompanyLink(message.expectedCompany, message.headline) });
       else if (message?.type === "EXTRACT_COMPANY") sendResponse({ ok: true, company: extractCompany() });
       else return false;
     } catch (e) { sendResponse({ ok: false, error: e?.message || "Falha ao extrair dados." }); }
