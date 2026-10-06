@@ -5,7 +5,7 @@ import { attachDatabasePool } from "@neon/functions";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
 attachDatabasePool(pool);
 
-const VERSION = "0.7.0";
+const VERSION = "0.7.1";
 const MAX_BODY_BYTES = 180_000;
 const LEGACY_TOKENS = [
   process.env.PULSE_EXTENSION_TOKEN_LEGACY_CURRENT,
@@ -28,6 +28,22 @@ const clean = (value: unknown, max = 4000) => {
   const v = value.replace(/\s+/g, " ").trim();
   return v ? v.slice(0, max) : null;
 };
+
+async function readJsonLimited(request: Request, maxBytes = MAX_BODY_BYTES) {
+  const buffer = await request.arrayBuffer();
+  if (buffer.byteLength > maxBytes) {
+    const error = new Error("Payload too large");
+    (error as any).status = 413;
+    throw error;
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(buffer));
+  } catch {
+    const error = new Error("JSON inválido");
+    (error as any).status = 400;
+    throw error;
+  }
+}
 const q = async <T = Record<string, unknown>>(
   text: string,
   values: unknown[] = [],
@@ -73,11 +89,37 @@ async function authenticate(request: Request) {
       [sha(deviceToken)]
     );
     if (rows.length) {
+      let ownerUserId = rows[0].owner_user_id;
+      if (!ownerUserId) {
+        const historicalOwner = await q<{ owner_user_id: string }>(
+          "SELECT owner_user_id::text FROM public.linkedin_pairing_codes WHERE used_by_device_id=$1 AND owner_user_id IS NOT NULL ORDER BY used_at DESC NULLS LAST, created_at DESC LIMIT 1",
+          [rows[0].device_id]
+        );
+        if (historicalOwner.length) {
+          ownerUserId = historicalOwner[0].owner_user_id;
+          await q(
+            "UPDATE public.linkedin_devices SET owner_user_id=$2::bigint WHERE device_id=$1 AND owner_user_id IS NULL",
+            [rows[0].device_id, ownerUserId]
+          );
+        }
+      }
+
+      if (!ownerUserId) {
+        return {
+          ok: false,
+          deviceId: rows[0].device_id,
+          ownerUserId: null,
+          mode: "device",
+          extensionVersion,
+          reason: "device_unowned"
+        };
+      }
+
       await q(
         "UPDATE public.linkedin_devices SET last_seen_at=NOW(), extension_version=COALESCE($2,extension_version) WHERE device_id=$1",
         [rows[0].device_id, extensionVersion]
       );
-      return { ok: true, deviceId: rows[0].device_id, ownerUserId: rows[0].owner_user_id, mode: "device", extensionVersion };
+      return { ok: true, deviceId: rows[0].device_id, ownerUserId, mode: "device", extensionVersion };
     }
   }
 
@@ -304,9 +346,9 @@ export default {
       if (request.method === "POST" && path === "/pair") {
         let body: any;
         try {
-          body = await request.json();
-        } catch {
-          return json({ error: "JSON inválido" }, 400);
+          body = await readJsonLimited(request, 16_384);
+        } catch (error: any) {
+          return json({ error: error?.message || "JSON inválido" }, error?.status || 400);
         }
 
         const code = clean(body?.pairing_code, 100);
@@ -367,12 +409,16 @@ export default {
       const auth = await authenticate(request);
       if (!auth.ok) {
         await audit("auth_failed", {
+          deviceId: auth.deviceId,
           success: false,
           httpStatus: 401,
           extensionVersion: auth.extensionVersion,
-          details: { path },
+          details: { path, reason: (auth as any).reason || "invalid_credentials" },
         });
-        return json({ error: "Unauthorized" }, 401);
+        return json(
+          { error: (auth as any).reason === "device_unowned" ? "Dispositivo precisa ser pareado novamente." : "Unauthorized" },
+          401
+        );
       }
 
       if (request.method === "GET" && (path === "/" || path === "/status")) {
@@ -406,14 +452,11 @@ export default {
         return json({ error: "Not found" }, 404);
       }
 
-      const length = Number(request.headers.get("content-length") || "0");
-      if (length > MAX_BODY_BYTES) return json({ error: "Payload too large" }, 413);
-
       let body: any;
       try {
-        body = await request.json();
-      } catch {
-        return json({ error: "JSON inválido" }, 400);
+        body = await readJsonLimited(request);
+      } catch (error: any) {
+        return json({ error: error?.message || "JSON inválido" }, error?.status || 400);
       }
 
       const requestId = clean(body?.request_id, 100);
