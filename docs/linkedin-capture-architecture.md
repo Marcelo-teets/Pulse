@@ -1,7 +1,7 @@
 # Pulse LinkedIn Capture — arquitetura
 
 ## Fluxo
-LinkedIn -> Chrome Extension v0.8.6 -> Neon Function/API v0.7.0 -> Postgres -> fila de sincronização -> Google Sheets.
+LinkedIn -> Chrome Extension v0.8.7 -> Neon Function/API v0.7.0 -> Postgres -> fila de sincronização -> Google Sheets.
 
 ## Segurança
 A extensão não contém segredo compartilhado. O primeiro uso exige pairing code de uso único. O backend troca o código por token aleatório exclusivo do dispositivo, armazena apenas SHA-256 do token e permite revogação individual. Tokens expiram em 90 dias.
