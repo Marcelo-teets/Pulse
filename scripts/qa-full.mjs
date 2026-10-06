@@ -25,7 +25,7 @@ critical.forEach(exists);
 
 const manifest = JSON.parse(read("extensions/linkedin-capture/manifest.json"));
 assert.equal(manifest.manifest_version, 3);
-assert.equal(manifest.version, "0.8.8");
+assert.equal(manifest.version, "0.8.9");
 assert.ok(manifest.permissions.includes("scripting"));
 assert.ok(manifest.content_scripts.some((x) => x.matches.some((m) => m.includes("linkedin.com/in/"))));
 
@@ -78,7 +78,7 @@ assert.ok(bg.includes("for(let attemptIndex=0;attemptIndex<6;attemptIndex++)"), 
 assert.ok(bg.includes("attemptIndex},2"), "click retry index is not sent to content script");
 
 const api = read("functions/linkedin/index.ts");
-assert.ok(api.includes('const VERSION = "0.7.1"'));
+assert.ok(api.includes('const VERSION = "0.7.2"'));
 assert.ok(api.includes("normalizeLinkedinUrl"));
 assert.ok(api.includes("request_id inválido"));
 assert.ok(api.includes("findExisting(requestId)"));
@@ -107,7 +107,7 @@ assert.ok(dropDevice >= 0 && createDevice > dropDevice, "device view recreation 
 assert.ok(dropAudit >= 0 && createAudit > dropAudit, "audit view recreation is not idempotent");
 assert.ok(schema.includes("pg_advisory_xact_lock"), "schema initialization is not serialized across serverless instances");
 assert.ok(schema.includes("ROLLBACK"), "schema initialization rollback guard missing");
-assert.ok(schema.includes("SCHEMA_VERSION = 4"), "runtime schema version missing");
+assert.ok(schema.includes("SCHEMA_VERSION = 5"), "runtime schema version missing");
 assert.ok(schema.includes("pulse_schema_meta"), "runtime schema metadata table missing");
 assert.ok(schema.includes("Number(current.rows[0]?.version || 0) < SCHEMA_VERSION"), "runtime schema version gate missing");
 
@@ -154,7 +154,7 @@ for (const marker of [
   'getValues(token, "Empresas!A2:G")',
   'getValues(token, "Capturas!A2:A")',
   "existingCaptureIds",
-  'const LINKEDIN_API_VERSION = "0.7.1"',
+  'const LINKEDIN_API_VERSION = "0.7.2"',
   "metricsUpdated: true"
 ]) assert.ok(worker.includes(marker), `missing Sheets worker invariant: ${marker}`);
 const emptyQueuePos = worker.indexOf("if (!ids.length)");
@@ -182,11 +182,11 @@ assert.equal(vercel.installCommand, "npm ci --no-audit --no-fund");
 const neonBuilder = read("scripts/build-neon-linkedin-function.mjs");
 assert.ok(neonBuilder.includes("esbuild@0.25.10"), "Neon function bundler must pin esbuild");
 assert.ok(neonBuilder.includes("--target=node24"), "Neon function target must be Node 24");
-assert.ok(neonBuilder.includes("pulse-linkedin-api-v0.7.1.zip"), "Neon function artifact version mismatch");
+assert.ok(neonBuilder.includes("pulse-linkedin-api-v0.7.2.zip"), "Neon function artifact version mismatch");
 
 const fullQa = read(".github/workflows/full-qa.yml");
 assert.ok(fullQa.includes("Bundle Neon LinkedIn Function"), "Full QA must compile Neon Function");
-assert.ok(fullQa.includes("pulse-linkedin-api-v0.7.1"), "Full QA must publish Neon Function artifact");
+assert.ok(fullQa.includes("pulse-linkedin-api-v0.7.2"), "Full QA must publish Neon Function artifact");
 
 const readme = read("README.md");
 assert.ok(readme.includes("1x por dia às 09:00 UTC"), "README cron schedule is stale");
@@ -203,9 +203,9 @@ for (const file of scanFiles) {
 }
 
 const extensionReadme = read("extensions/linkedin-capture/README.md");
-assert.ok(extensionReadme.includes("v0.8.8"), "extension README version is stale");
+assert.ok(extensionReadme.includes("v0.8.9"), "extension README version is stale");
 const architecture = read("docs/linkedin-capture-architecture.md");
-assert.ok(architecture.includes("v0.8.8"), "architecture extension version is stale");
-assert.ok(architecture.includes("API v0.7.1"), "architecture API version is stale");
+assert.ok(architecture.includes("v0.8.9"), "architecture extension version is stale");
+assert.ok(architecture.includes("API v0.7.2"), "architecture API version is stale");
 
 console.log("Pulse full structural QA: OK");
