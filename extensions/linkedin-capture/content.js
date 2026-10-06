@@ -264,40 +264,68 @@
     return { current_title: expRole?.current_title || headline, current_company: expectedCompany, company_url: "" };
   }
 
-  function clickCompanyAffiliation(expectedCompany) {
+  function clickCompanyAffiliation(expectedCompany, attemptIndex = 0) {
     const expectedKey = companyKey(expectedCompany);
     if (!expectedKey) return { clicked: false, reason: "empty_company" };
     const top = profileTopCard();
 
-    const candidates = [...top.querySelectorAll("a,button,[role='button'],span,div")]
+    const starts = [...top.querySelectorAll("a,button,[role='button'],span,div")]
       .filter((el) => {
         const value = likelyAffiliationName(txt(el) || attr(el, "aria-label"));
         return value && companyKey(value) === expectedKey;
       });
 
-    for (const start of candidates) {
+    const targets = [];
+    const seen = new Set();
+    for (const start of starts) {
       let el = start;
-      for (let depth = 0; el && depth < 6; depth += 1, el = el.parentElement) {
+      for (let depth = 0; el && depth < 7; depth += 1, el = el.parentElement) {
+        if (seen.has(el)) continue;
+        seen.add(el);
         const href = attr(el, "href");
-        const clickable =
-          el.tagName === "A" ||
-          el.tagName === "BUTTON" ||
-          attr(el, "role") === "button" ||
-          attr(el, "tabindex") === "0" ||
-          typeof el.click === "function";
-        if (!clickable) continue;
-
         const direct = companyUrl(href);
         if (direct) return { clicked: false, company_url: direct, reason: "direct_href" };
 
-        try {
-          el.scrollIntoView?.({ block: "center", inline: "nearest" });
-          el.click?.();
-          return { clicked: true, company_url: "", reason: "clicked_visible_affiliation" };
-        } catch {}
+        const tag = String(el.tagName || "").toUpperCase();
+        const role = attr(el, "role").toLowerCase();
+        const tabindex = attr(el, "tabindex");
+        const interactive =
+          tag === "A" ||
+          tag === "BUTTON" ||
+          role === "button" ||
+          role === "link" ||
+          tabindex === "0" ||
+          /(?:button|link|top-card|experience)/i.test(attr(el, "data-view-name") + " " + attr(el, "class"));
+        if (!interactive && depth < 1) continue;
+
+        const score =
+          (tag === "A" ? 100 : 0) +
+          (tag === "BUTTON" ? 90 : 0) +
+          (role === "link" ? 80 : 0) +
+          (role === "button" ? 70 : 0) +
+          (tabindex === "0" ? 50 : 0) +
+          Math.max(0, 20 - depth * 3);
+        targets.push({ el, score });
       }
     }
-    return { clicked: false, company_url: "", reason: "company_affiliation_not_clickable" };
+
+    targets.sort((a, b) => b.score - a.score);
+    const target = targets[Math.max(0, Number(attemptIndex) || 0)];
+    if (!target) return { clicked: false, company_url: "", reason: "company_affiliation_not_clickable" };
+
+    try {
+      target.el.scrollIntoView?.({ block: "center", inline: "nearest" });
+      target.el.click?.();
+      return {
+        clicked: true,
+        company_url: "",
+        reason: "clicked_visible_affiliation",
+        attempt_index: Math.max(0, Number(attemptIndex) || 0),
+        target_count: targets.length
+      };
+    } catch {
+      return { clicked: false, company_url: "", reason: "company_affiliation_click_failed" };
+    }
   }
 
   function currentRole(headline) {
@@ -420,7 +448,7 @@
     try {
       if (message?.type === "EXTRACT_PROFILE") sendResponse({ ok: true, profile: extractProfile() });
       else if (message?.type === "RESOLVE_COMPANY_LINK") sendResponse({ ok: true, role: resolveCompanyLink(message.expectedCompany, message.headline) });
-      else if (message?.type === "CLICK_COMPANY_AFFILIATION") sendResponse({ ok: true, ...clickCompanyAffiliation(message.expectedCompany) });
+      else if (message?.type === "CLICK_COMPANY_AFFILIATION") sendResponse({ ok: true, ...clickCompanyAffiliation(message.expectedCompany, message.attemptIndex) });
       else if (message?.type === "EXTRACT_COMPANY") sendResponse({ ok: true, company: extractCompany() });
       else return false;
     } catch (e) { sendResponse({ ok: false, error: e?.message || "Falha ao extrair dados." }); }
