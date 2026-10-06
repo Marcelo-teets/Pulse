@@ -23,5 +23,7 @@ const content = fs.readFileSync(`${root}/content.js`, "utf8");
 if (!content.includes("__pulseLinkedinCaptureLoaded === CONTENT_VERSION")) throw new Error("Version-aware content-script reload guard missing");
 if (!content.includes('if (!full_name) throw new Error')) throw new Error("Fail-closed missing-name guard missing");
 if (!content.includes('if (!headline) throw new Error')) throw new Error("Fail-closed headline guard missing");
-if (!content.includes('if (!role.current_company || !role.company_url)')) throw new Error("Fail-closed company guard missing");
+if (!content.includes('if (!role.current_company) throw new Error')) throw new Error("Fail-closed company-name guard missing");
+if (!content.includes("RESOLVE_COMPANY_LINK") || !content.includes("resolveCompanyLink")) throw new Error("Href-less company resolver missing");
+if (!bg.includes("resolveCompanyLinkFromProfile") || !bg.includes("Encontrei a empresa atual no perfil, mas não consegui resolver")) throw new Error("Background Experience fallback missing");
 console.log("LinkedIn extension validation: OK");
