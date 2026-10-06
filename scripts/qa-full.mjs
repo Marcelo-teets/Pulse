@@ -18,7 +18,8 @@ const critical = [
   "app/api/internal/sheets-sync/route.js",
   "lib/schema.js",
   "proxy.js",
-  "vercel.json"
+  "vercel.json",
+  "scripts/build-neon-linkedin-function.mjs"
 ];
 critical.forEach(exists);
 
@@ -115,7 +116,9 @@ assert.ok(authLib.includes("DELETE FROM public.pulse_sessions WHERE expires_at <
 
 const signupRoute = read("app/api/auth/signup/route.js");
 assert.ok(!signupRoute.includes("masterCount"), "first signup must never auto-promote to master");
-assert.ok(signupRoute.includes('masterEmail && email === masterEmail'), "master role must be bound to configured master email");
+assert.ok(signupRoute.includes('PULSE_ALLOW_PUBLIC_SIGNUP === "true"'), "public signup must be explicitly enabled");
+assert.ok(signupRoute.includes("isBootstrapMaster"), "safe master bootstrap path missing");
+assert.ok(signupRoute.includes("Cadastro público desativado"), "closed-by-default signup guard missing");
 
 const companiesRoute = read("app/api/companies/route.js");
 assert.ok(companiesRoute.includes("pulse_user_people"), "company people_count must be scoped to the authenticated user");
@@ -125,6 +128,17 @@ const pageShell = read("app/components/PageShell.js");
 assert.ok(pageShell.includes('if (!payload.authenticated)'), "expired-session redirect missing from PageShell");
 assert.ok(pageShell.includes('window.location.href = "/auth"'), "PageShell login redirect missing");
 assert.ok(pageShell.includes('["Operação", "◫", "/operacao", "master"]'), "Operations navigation must be master-only");
+
+const authPage = read("app/auth/page.js");
+assert.ok(authPage.includes('fetch("/api/auth/me"'), "auth page must verify the session");
+assert.ok(authPage.includes("router.replace"), "verified-session redirect missing");
+assert.ok(authPage.includes("signupEnabled"), "signup visibility guard missing");
+
+const usersPage = read("app/usuarios/page.js");
+assert.ok(usersPage.includes("response.status === 403"), "user admin page must handle forbidden access");
+
+const operationsPage = read("app/operacao/page.js");
+assert.ok(operationsPage.includes("response.status === 403"), "operations page must handle forbidden access");
 
 const worker = read("app/api/internal/sheets-sync/route.js");
 for (const marker of [
@@ -157,12 +171,22 @@ for (const path of ["/auth","/api/auth/login","/api/auth/signup","/api/health","
 assert.ok(proxy.includes('request.cookies.has("pulse_session")'));
 assert.ok(proxy.includes('const isApi = pathname.startsWith("/api/")'), "API pass-through guard missing");
 assert.ok(proxy.includes("if (isApi)"), "API routes must reach their own 401/403 handlers");
+assert.ok(!proxy.includes('pathname === "/auth" && hasSession'), "proxy must not redirect /auth based only on stale cookie presence");
 
 const vercel = JSON.parse(read("vercel.json"));
 assert.ok(Array.isArray(vercel.crons) && vercel.crons.length === 1);
 assert.equal(vercel.crons[0].path, "/api/internal/sheets-sync");
 assert.equal(vercel.crons[0].schedule, "0 9 * * *");
 assert.equal(vercel.installCommand, "npm ci --no-audit --no-fund");
+
+const neonBuilder = read("scripts/build-neon-linkedin-function.mjs");
+assert.ok(neonBuilder.includes("esbuild@0.25.10"), "Neon function bundler must pin esbuild");
+assert.ok(neonBuilder.includes("--target=node24"), "Neon function target must be Node 24");
+assert.ok(neonBuilder.includes("pulse-linkedin-api-v0.7.1.zip"), "Neon function artifact version mismatch");
+
+const fullQa = read(".github/workflows/full-qa.yml");
+assert.ok(fullQa.includes("Bundle Neon LinkedIn Function"), "Full QA must compile Neon Function");
+assert.ok(fullQa.includes("pulse-linkedin-api-v0.7.1"), "Full QA must publish Neon Function artifact");
 
 const readme = read("README.md");
 assert.ok(readme.includes("1x por dia às 09:00 UTC"), "README cron schedule is stale");
