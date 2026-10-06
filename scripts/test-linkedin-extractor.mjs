@@ -34,7 +34,7 @@ function tagged(tag, text, children = [], attrs = {}, classes = []) {
   if (tag === "section") for (const child of children) child.section = n;
   return n;
 }
-function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, school = "", includeExperience = false, messageType = "EXTRACT_PROFILE", expectedCompany = "" }) {
+function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, school = "", includeExperience = false, messageType = "EXTRACT_PROFILE", expectedCompany = "", attemptIndex = 0 }) {
   const nameNode = tagged("div", name, [], {}, modern ? [] : ["text-heading-xlarge"]);
   const header = tagged("section", "", [
     tagged("h1", "Foto do perfil"),
@@ -70,7 +70,7 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
   const message = messageType === "RESOLVE_COMPANY_LINK"
     ? {type:messageType, expectedCompany, headline:title}
     : messageType === "CLICK_COMPANY_AFFILIATION"
-      ? {type:messageType, expectedCompany}
+      ? {type:messageType, expectedCompany, attemptIndex}
       : {type:messageType};
   handler(message, {}, value => response = value);
   return response;
@@ -142,5 +142,7 @@ const danielClicked = capture({name:"Daniel Brandão",title:"Founder | CEO | Ban
 assert.equal(danielClicked.ok, true);
 assert.equal(danielClicked.clicked, true);
 assert.equal(danielClicked.reason, "clicked_visible_affiliation");
+assert.equal(danielClicked.attempt_index, 0);
+assert.ok(danielClicked.target_count >= 1);
 
 console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, weak-single-signal, href-less-current-company + experience-link-resolution + click-navigation-fallback, missing-name/title/company, generic-title and missing-location guards OK");
