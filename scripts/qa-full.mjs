@@ -24,7 +24,7 @@ critical.forEach(exists);
 
 const manifest = JSON.parse(read("extensions/linkedin-capture/manifest.json"));
 assert.equal(manifest.manifest_version, 3);
-assert.equal(manifest.version, "0.8.6");
+assert.equal(manifest.version, "0.8.7");
 assert.ok(manifest.permissions.includes("scripting"));
 assert.ok(manifest.content_scripts.some((x) => x.matches.some((m) => m.includes("linkedin.com/in/"))));
 
@@ -45,6 +45,8 @@ assert.ok(content.includes('if (!headline) throw new Error'), "content extractor
 assert.ok(content.includes('if (!role.current_company) throw new Error'), "content extractor must fail closed without company name evidence");
 assert.ok(content.includes("RESOLVE_COMPANY_LINK"), "href-less company resolver message missing");
 assert.ok(content.includes("function resolveCompanyLink"), "href-less company resolver missing");
+assert.ok(content.includes("CLICK_COMPANY_AFFILIATION"), "visible company click message missing");
+assert.ok(content.includes("function clickCompanyAffiliation"), "visible company click fallback missing");
 
 const bg = read("extensions/linkedin-capture/background.js");
 assert.ok(!bg.includes("nameFromTitle"), "unsafe tab-title name fallback must not exist");
@@ -58,6 +60,8 @@ for (const marker of [
   "x-pulse-device-token",
   "if(!person.full_name||!person.current_title||!person.current_company)",
   "resolveCompanyLinkFromProfile",
+  "CLICK_COMPANY_AFFILIATION",
+  "click?.clicked",
   "if(!companyUrl)throw new Error",
   "chrome.scripting.executeScript",
   "companyAboutUrl"
@@ -153,9 +157,9 @@ for (const file of scanFiles) {
 }
 
 const extensionReadme = read("extensions/linkedin-capture/README.md");
-assert.ok(extensionReadme.includes("v0.8.6"), "extension README version is stale");
+assert.ok(extensionReadme.includes("v0.8.7"), "extension README version is stale");
 const architecture = read("docs/linkedin-capture-architecture.md");
-assert.ok(architecture.includes("v0.8.6"), "architecture extension version is stale");
+assert.ok(architecture.includes("v0.8.7"), "architecture extension version is stale");
 assert.ok(architecture.includes("API v0.7.0"), "architecture API version is stale");
 
 console.log("Pulse full structural QA: OK");
