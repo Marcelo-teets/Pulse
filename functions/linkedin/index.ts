@@ -30,12 +30,41 @@ const clean = (value: unknown, max = 4000) => {
 };
 
 async function readJsonLimited(request: Request, maxBytes = MAX_BODY_BYTES) {
-  const buffer = await request.arrayBuffer();
-  if (buffer.byteLength > maxBytes) {
-    const error = new Error("Payload too large");
-    (error as any).status = 413;
+  if (!request.body) {
+    const error = new Error("JSON inválido");
+    (error as any).status = 400;
     throw error;
   }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel("payload too large").catch(() => {});
+        const error = new Error("Payload too large");
+        (error as any).status = 413;
+        throw error;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const buffer = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buffer.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
   try {
     return JSON.parse(new TextDecoder().decode(buffer));
   } catch {
