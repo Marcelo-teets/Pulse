@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pulse LinkedIn Capture",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "description": "Captura perfis e empresas do LinkedIn com pareamento por dispositivo, fila offline, idempotência e sincronização com o Pulse.",
   "minimum_chrome_version": "114",
   "permissions": ["activeTab","storage","tabs","alarms","scripting"],
