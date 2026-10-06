@@ -20,7 +20,8 @@ const critical = [
   "proxy.js",
   "vercel.json",
   "scripts/build-neon-linkedin-function.mjs",
-  "migrations/004_company_linkedin_identity.sql"
+  "migrations/004_company_linkedin_identity.sql",
+  "migrations/005_login_rate_limit.sql"
 ];
 critical.forEach(exists);
 
@@ -111,13 +112,19 @@ assert.ok(dropDevice >= 0 && createDevice > dropDevice, "device view recreation 
 assert.ok(dropAudit >= 0 && createAudit > dropAudit, "audit view recreation is not idempotent");
 assert.ok(schema.includes("pg_advisory_xact_lock"), "schema initialization is not serialized across serverless instances");
 assert.ok(schema.includes("ROLLBACK"), "schema initialization rollback guard missing");
-assert.ok(schema.includes("SCHEMA_VERSION = 5"), "runtime schema version missing");
+assert.ok(schema.includes("SCHEMA_VERSION = 6"), "runtime schema version missing");
 assert.ok(schema.includes("pulse_schema_meta"), "runtime schema metadata table missing");
 assert.ok(schema.includes("Number(current.rows[0]?.version || 0) < SCHEMA_VERSION"), "runtime schema version gate missing");
 assert.ok(schema.includes("ux_linkedin_companies_linkedin_url"), "stable company LinkedIn URL unique index missing");
 
 const authLib = read("lib/auth.js");
 assert.ok(authLib.includes("DELETE FROM public.pulse_sessions WHERE expires_at <= NOW() OR revoked_at IS NOT NULL"), "stale session cleanup missing");
+
+const loginRoute = read("app/api/auth/login/route.js");
+assert.ok(loginRoute.includes("pulse_login_attempts"), "persistent login throttling missing");
+assert.ok(loginRoute.includes("status: 429"), "login throttling must return HTTP 429");
+assert.ok(loginRoute.includes('"retry-after": "900"'), "login throttle retry hint missing");
+assert.ok(loginRoute.includes("failures + 1"), "login failure counter missing");
 
 const signupRoute = read("app/api/auth/signup/route.js");
 assert.ok(!signupRoute.includes("masterCount"), "first signup must never auto-promote to master");
