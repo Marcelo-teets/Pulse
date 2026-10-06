@@ -5,7 +5,7 @@ import { attachDatabasePool } from "@neon/functions";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
 attachDatabasePool(pool);
 
-const VERSION = "0.7.1";
+const VERSION = "0.7.2";
 const MAX_BODY_BYTES = 180_000;
 const LEGACY_TOKENS = [
   process.env.PULSE_EXTENSION_TOKEN_LEGACY_CURRENT,
@@ -174,6 +174,23 @@ function normalizeLinkedinUrl(value: unknown) {
   }
 }
 
+function normalizeLinkedinCompanyUrl(value: unknown) {
+  const raw = clean(value, 2000);
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (!/(^|\.)linkedin\.com$/i.test(u.hostname)) return null;
+    const m = u.pathname.match(/^\/company\/[^/?#]+/i);
+    if (!m) return null;
+    u.pathname = m[0];
+    u.search = "";
+    u.hash = "";
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
 function capturedAt(value: unknown) {
   if (typeof value === "string" && !Number.isNaN(Date.parse(value))) {
     const d = new Date(value);
@@ -207,8 +224,10 @@ function validateCompany(input: any, fallback: unknown) {
   if (!company_name) throw new Error("company_name é obrigatório");
   let website = clean(input?.website, 2000);
   if (website && !/^https?:\/\//i.test(website)) website = null;
+  const linkedin_url = normalizeLinkedinCompanyUrl(input?.linkedin_url);
   return {
     company_name,
+    linkedin_url,
     description: clean(input?.description, 12000),
     website,
     employee_count: clean(input?.employee_count, 500),
@@ -217,6 +236,7 @@ function validateCompany(input: any, fallback: unknown) {
 }
 
 function companyKey(company: any) {
+  if (company.linkedin_url) return sha(`linkedin:${company.linkedin_url.toLowerCase()}`);
   let host = "";
   try {
     host = company.website ? new URL(company.website).hostname.toLowerCase().replace(/^www\./, "") : "";
@@ -273,11 +293,12 @@ async function persist(requestId: string, person: any, company: any, ownerUserId
     const personCaptureId = personCapture[0].id;
 
     const companyCapture = await q<{ id: string }>(
-      "INSERT INTO public.linkedin_company_captures(request_id,person_capture_id,company_name,description,website,employee_count,captured_at,owner_user_id) VALUES($1,$2::bigint,$3,$4,$5,$6,$7::timestamptz,$8::bigint) RETURNING id::text",
+      "INSERT INTO public.linkedin_company_captures(request_id,person_capture_id,company_name,linkedin_url,description,website,employee_count,captured_at,owner_user_id) VALUES($1,$2::bigint,$3,$4,$5,$6,$7,$8::timestamptz,$9::bigint) RETURNING id::text",
       [
         requestId,
         personCaptureId,
         company.company_name,
+        company.linkedin_url,
         company.description,
         company.website,
         company.employee_count,
@@ -303,11 +324,33 @@ async function persist(requestId: string, person: any, company: any, ownerUserId
       client
     );
 
+    const stableCompanyKey = companyKey(company);
+    if (company.linkedin_url) {
+      const sameName = await q<{ id: string }>(
+        `SELECT id::text
+           FROM public.linkedin_companies
+          WHERE linkedin_url IS NULL
+            AND LOWER(BTRIM(company_name)) = LOWER(BTRIM($1))
+          ORDER BY last_seen_at DESC
+          LIMIT 2`,
+        [company.company_name],
+        client
+      );
+      if (sameName.length === 1) {
+        await q(
+          "UPDATE public.linkedin_companies SET linkedin_url=$2, company_key=$3 WHERE id=$1::bigint AND linkedin_url IS NULL",
+          [sameName[0].id, company.linkedin_url, stableCompanyKey],
+          client
+        );
+      }
+    }
+
     const canonicalCompany = await q<{ id: string }>(
-      "INSERT INTO public.linkedin_companies(company_key,company_name,description,website,employee_count,first_seen_at,last_seen_at,last_capture_id,owner_user_id) VALUES($1,$2,$3,$4,$5,$6::timestamptz,$6::timestamptz,$7::bigint,$8::bigint) ON CONFLICT(company_key) DO UPDATE SET company_name=EXCLUDED.company_name,description=COALESCE(EXCLUDED.description,public.linkedin_companies.description),website=COALESCE(EXCLUDED.website,public.linkedin_companies.website),employee_count=COALESCE(EXCLUDED.employee_count,public.linkedin_companies.employee_count),last_seen_at=GREATEST(public.linkedin_companies.last_seen_at,EXCLUDED.last_seen_at),last_capture_id=EXCLUDED.last_capture_id,owner_user_id=COALESCE(public.linkedin_companies.owner_user_id, EXCLUDED.owner_user_id) RETURNING id::text",
+      "INSERT INTO public.linkedin_companies(company_key,company_name,linkedin_url,description,website,employee_count,first_seen_at,last_seen_at,last_capture_id,owner_user_id) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz,$7::timestamptz,$8::bigint,$9::bigint) ON CONFLICT(company_key) DO UPDATE SET company_name=EXCLUDED.company_name,linkedin_url=COALESCE(EXCLUDED.linkedin_url,public.linkedin_companies.linkedin_url),description=COALESCE(EXCLUDED.description,public.linkedin_companies.description),website=COALESCE(EXCLUDED.website,public.linkedin_companies.website),employee_count=COALESCE(EXCLUDED.employee_count,public.linkedin_companies.employee_count),last_seen_at=GREATEST(public.linkedin_companies.last_seen_at,EXCLUDED.last_seen_at),last_capture_id=EXCLUDED.last_capture_id,owner_user_id=COALESCE(public.linkedin_companies.owner_user_id, EXCLUDED.owner_user_id) RETURNING id::text",
       [
-        companyKey(company),
+        stableCompanyKey,
         company.company_name,
+        company.linkedin_url,
         company.description,
         company.website,
         company.employee_count,
