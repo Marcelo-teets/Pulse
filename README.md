@@ -50,7 +50,7 @@ Não versione:
 - tokens OAuth
 - credenciais Google
 
-A extensão distribuída localmente pode receber o token por `chrome.storage.local`. Em uma futura distribuição pública, substitua o token compartilhado por autenticação individual.
+A extensão usa pareamento por dispositivo: um código temporário de uso único é trocado por um token aleatório exclusivo do Chrome. O backend armazena somente o hash do token, e a extensão mantém a credencial em `chrome.storage.local` restrito a contextos confiáveis.
 
 
 ## Frontend operacional
