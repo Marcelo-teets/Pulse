@@ -235,18 +235,22 @@ function validateCompany(input: any, fallback: unknown) {
   };
 }
 
+function companyNameKey(value: unknown) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 function companyKey(company: any) {
   if (company.linkedin_url) return sha(`linkedin:${company.linkedin_url.toLowerCase()}`);
   let host = "";
   try {
     host = company.website ? new URL(company.website).hostname.toLowerCase().replace(/^www\./, "") : "";
   } catch {}
-  const name = company.company_name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  const name = companyNameKey(company.company_name);
   return sha(`${name}|${host}`);
 }
 
@@ -541,6 +545,9 @@ export default {
       try {
         person = validatePerson(body?.person);
         company = validateCompany(body?.company, person.current_company);
+        if (companyNameKey(person.current_company) !== companyNameKey(company.company_name)) {
+          throw new Error("current_company e company_name precisam representar a mesma empresa");
+        }
       } catch (error: any) {
         return json({ error: error.message || "Payload inválido" }, 400);
       }
@@ -558,6 +565,7 @@ export default {
           duplicate: !!result.duplicate,
           quality_score: Number.isFinite(Number(meta.quality_score)) ? Number(meta.quality_score) : null,
           missing_fields: Array.isArray(meta.missing_fields) ? meta.missing_fields.slice(0, 20) : [],
+          company_identity_overridden: meta.company_identity_overridden === true,
         },
       });
 
