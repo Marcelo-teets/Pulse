@@ -16,6 +16,7 @@ try {
   await apply("migrations/002_linkedin_capture_hardening.sql");
   await apply("migrations/003_multi_user_auth.sql");
   await apply("migrations/004_company_linkedin_identity.sql");
+  await apply("migrations/005_login_rate_limit.sql");
 
   // Simulate separate serverless cold starts initializing the same schema concurrently.
   const schemaA = await import("../lib/schema.js?instance=a");
@@ -26,7 +27,7 @@ try {
     "linkedin_profile_captures","linkedin_company_captures","linkedin_sheet_sync_queue",
     "linkedin_people","linkedin_companies","linkedin_current_roles","linkedin_devices",
     "linkedin_pairing_codes","linkedin_api_audit","pulse_users","pulse_sessions",
-    "pulse_user_people","pulse_user_companies","pulse_schema_meta"
+    "pulse_user_people","pulse_user_companies","pulse_schema_meta","pulse_login_attempts"
   ];
   const tables = await db.query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
@@ -162,7 +163,7 @@ try {
   const stillThere = await db.query("SELECT count(*)::int AS n FROM public.linkedin_people");
   assert.equal(stillThere.rows[0].n, 2);
   const schemaVersion = await db.query("SELECT version FROM public.pulse_schema_meta WHERE key='runtime'");
-  assert.equal(schemaVersion.rows[0].version, 5);
+  assert.equal(schemaVersion.rows[0].version, 6);
   const companyIdentityColumns = await db.query(
     "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND column_name='linkedin_url' AND table_name IN ('linkedin_company_captures','linkedin_companies') ORDER BY table_name"
   );
