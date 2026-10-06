@@ -45,7 +45,6 @@ A planilha do Google Drive é um espelho operacional. O Neon/Postgres é a fonte
 ## Segurança
 
 Não versione:
-- `PULSE_EXTENSION_TOKEN`
 - `DATABASE_URL`
 - tokens OAuth
 - credenciais Google
