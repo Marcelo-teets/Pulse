@@ -20,6 +20,7 @@ const critical = [
   "proxy.js",
   "vercel.json",
   "scripts/build-neon-linkedin-function.mjs",
+  "scripts/test-linkedin-api-bundle.mjs",
   "migrations/004_company_linkedin_identity.sql",
   "migrations/005_login_rate_limit.sql"
 ];
@@ -200,6 +201,7 @@ assert.ok(neonBuilder.includes("pulse-linkedin-api-v0.7.2.zip"), "Neon function 
 
 const fullQa = read(".github/workflows/full-qa.yml");
 assert.ok(fullQa.includes("Bundle Neon LinkedIn Function"), "Full QA must compile Neon Function");
+assert.ok(fullQa.includes("Bundled LinkedIn API end-to-end"), "Full QA must execute the bundled LinkedIn API against Postgres");
 assert.ok(fullQa.includes("pulse-linkedin-api-v0.7.2"), "Full QA must publish Neon Function artifact");
 assert.ok(fullQa.includes("path: dist/linkedin-capture/**"), "extension artifact must expose manifest at archive root");
 assert.ok(!fullQa.includes("zip -r pulse-linkedin-capture"), "extension artifact must not be nested in a second ZIP");
