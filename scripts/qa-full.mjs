@@ -24,7 +24,7 @@ critical.forEach(exists);
 
 const manifest = JSON.parse(read("extensions/linkedin-capture/manifest.json"));
 assert.equal(manifest.manifest_version, 3);
-assert.equal(manifest.version, "0.8.7");
+assert.equal(manifest.version, "0.8.8");
 assert.ok(manifest.permissions.includes("scripting"));
 assert.ok(manifest.content_scripts.some((x) => x.matches.some((m) => m.includes("linkedin.com/in/"))));
 
@@ -72,7 +72,7 @@ assert.ok(bg.includes("safeEndpoint"), "API endpoint allowlist guard missing");
 assert.ok(bg.includes('candidate.protocol==="https:"&&candidate.origin===expected.origin'), "API endpoint origin pinning missing");
 
 const api = read("functions/linkedin/index.ts");
-assert.ok(api.includes('const VERSION = "0.7.0"'));
+assert.ok(api.includes('const VERSION = "0.7.1"'));
 assert.ok(api.includes("normalizeLinkedinUrl"));
 assert.ok(api.includes("request_id inválido"));
 assert.ok(api.includes("findExisting(requestId)"));
@@ -157,9 +157,9 @@ for (const file of scanFiles) {
 }
 
 const extensionReadme = read("extensions/linkedin-capture/README.md");
-assert.ok(extensionReadme.includes("v0.8.7"), "extension README version is stale");
+assert.ok(extensionReadme.includes("v0.8.8"), "extension README version is stale");
 const architecture = read("docs/linkedin-capture-architecture.md");
-assert.ok(architecture.includes("v0.8.7"), "architecture extension version is stale");
-assert.ok(architecture.includes("API v0.7.0"), "architecture API version is stale");
+assert.ok(architecture.includes("v0.8.8"), "architecture extension version is stale");
+assert.ok(architecture.includes("API v0.7.1"), "architecture API version is stale");
 
 console.log("Pulse full structural QA: OK");
