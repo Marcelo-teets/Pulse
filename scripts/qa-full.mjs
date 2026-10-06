@@ -47,6 +47,9 @@ assert.ok(content.includes("RESOLVE_COMPANY_LINK"), "href-less company resolver 
 assert.ok(content.includes("function resolveCompanyLink"), "href-less company resolver missing");
 assert.ok(content.includes("CLICK_COMPANY_AFFILIATION"), "visible company click message missing");
 assert.ok(content.includes("function clickCompanyAffiliation"), "visible company click fallback missing");
+assert.ok(content.includes("attemptIndex = 0"), "ranked click retry index missing");
+assert.ok(content.includes("targets.sort((a, b) => b.score - a.score)"), "click target ranking missing");
+assert.ok(content.includes("target_count"), "click target observability missing");
 
 const bg = read("extensions/linkedin-capture/background.js");
 assert.ok(!bg.includes("nameFromTitle"), "unsafe tab-title name fallback must not exist");
@@ -70,6 +73,8 @@ assert.ok(bg.includes("actualUrl.origin!==expected.origin") && bg.includes("actu
 assert.ok(bg.includes("nome canônico da empresa no LinkedIn"), "canonical company-name reconciliation missing");
 assert.ok(bg.includes("safeEndpoint"), "API endpoint allowlist guard missing");
 assert.ok(bg.includes('candidate.protocol==="https:"&&candidate.origin===expected.origin'), "API endpoint origin pinning missing");
+assert.ok(bg.includes("for(let attemptIndex=0;attemptIndex<6;attemptIndex++)"), "multiple click-target retry loop missing");
+assert.ok(bg.includes("attemptIndex},2"), "click retry index is not sent to content script");
 
 const api = read("functions/linkedin/index.ts");
 assert.ok(api.includes('const VERSION = "0.7.1"'));
@@ -84,6 +89,13 @@ assert.ok(api.includes('current_title é obrigatório'), "server-side current_ti
 assert.ok(api.includes('current_company é obrigatório'), "server-side current_company validation missing");
 assert.ok(api.includes("pulse_user_people WHERE user_id=$1::bigint"), "device status counts are not owner scoped");
 assert.ok(api.includes("4[0-9a-f]{3}-[89ab]"), "strict UUID v4 validation missing");
+assert.ok(api.includes("async function readJsonLimited"), "bounded JSON reader missing");
+assert.ok(api.includes("request.body.getReader()"), "request body must be streamed for size enforcement");
+assert.ok(api.includes('readJsonLimited(request, 16_384)'), "pairing payload limit missing");
+assert.ok(api.includes("readJsonLimited(request)"), "capture payload limit missing");
+assert.ok(api.includes("used_by_device_id=$1"), "historical pairing ownership recovery missing");
+assert.ok(api.includes('reason: "device_unowned"'), "unowned device fail-closed reason missing");
+assert.ok(api.includes("owner_user_id=$2::bigint"), "device ownership self-heal update missing");
 
 const schema = read("lib/schema.js");
 const dropDevice = schema.indexOf("DROP VIEW IF EXISTS public.linkedin_device_status");
@@ -98,6 +110,9 @@ assert.ok(schema.includes("SCHEMA_VERSION = 4"), "runtime schema version missing
 assert.ok(schema.includes("pulse_schema_meta"), "runtime schema metadata table missing");
 assert.ok(schema.includes("Number(current.rows[0]?.version || 0) < SCHEMA_VERSION"), "runtime schema version gate missing");
 
+const authLib = read("lib/auth.js");
+assert.ok(authLib.includes("DELETE FROM public.pulse_sessions WHERE expires_at <= NOW() OR revoked_at IS NOT NULL"), "stale session cleanup missing");
+
 const signupRoute = read("app/api/auth/signup/route.js");
 assert.ok(!signupRoute.includes("masterCount"), "first signup must never auto-promote to master");
 assert.ok(signupRoute.includes('masterEmail && email === masterEmail'), "master role must be bound to configured master email");
@@ -109,6 +124,7 @@ assert.ok(companiesRoute.includes("peopleCountSql"), "company people_count scopi
 const pageShell = read("app/components/PageShell.js");
 assert.ok(pageShell.includes('if (!payload.authenticated)'), "expired-session redirect missing from PageShell");
 assert.ok(pageShell.includes('window.location.href = "/auth"'), "PageShell login redirect missing");
+assert.ok(pageShell.includes('["Operação", "◫", "/operacao", "master"]'), "Operations navigation must be master-only");
 
 const worker = read("app/api/internal/sheets-sync/route.js");
 for (const marker of [
@@ -123,8 +139,13 @@ for (const marker of [
   'getValues(token, "Pessoas!A2:H")',
   'getValues(token, "Empresas!A2:G")',
   'getValues(token, "Capturas!A2:A")',
-  "existingCaptureIds"
+  "existingCaptureIds",
+  'const LINKEDIN_API_VERSION = "0.7.1"',
+  "metricsUpdated: true"
 ]) assert.ok(worker.includes(marker), `missing Sheets worker invariant: ${marker}`);
+const emptyQueuePos = worker.indexOf("if (!ids.length)");
+const metricsPos = worker.indexOf("await updateOperationalMetrics(database, token)", emptyQueuePos);
+assert.ok(emptyQueuePos >= 0 && metricsPos > emptyQueuePos, "empty queue must still refresh operational metrics");
 
 const health = read("app/api/health/route.js");
 assert.ok((health.match(/status: 503/g) || []).length >= 2, "degraded health checks must return HTTP 503");
@@ -141,6 +162,7 @@ const vercel = JSON.parse(read("vercel.json"));
 assert.ok(Array.isArray(vercel.crons) && vercel.crons.length === 1);
 assert.equal(vercel.crons[0].path, "/api/internal/sheets-sync");
 assert.equal(vercel.crons[0].schedule, "0 9 * * *");
+assert.equal(vercel.installCommand, "npm ci --no-audit --no-fund");
 
 const readme = read("README.md");
 assert.ok(readme.includes("1x por dia às 09:00 UTC"), "README cron schedule is stale");
