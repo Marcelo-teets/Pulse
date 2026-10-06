@@ -37,8 +37,7 @@ jobs:
       - run: node --check extensions/linkedin-capture/content.js
       - run: node scripts/test-linkedin-extractor.mjs
       - run: node scripts/build-linkedin-extension.mjs
-      - run: cd dist && zip -r pulse-linkedin-capture-v0.8.9.zip linkedin-capture
       - uses: actions/upload-artifact@v4
         with:
           name: pulse-linkedin-capture-v0.8.9
-          path: dist/pulse-linkedin-capture-v0.8.9.zip
+          path: dist/linkedin-capture/**
