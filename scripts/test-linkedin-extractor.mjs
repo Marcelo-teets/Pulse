@@ -5,7 +5,9 @@ import vm from "node:vm";
 const script = fs.readFileSync("extensions/linkedin-capture/content.js", "utf8");
 function node(text = "", children = [], attributes = {}) {
   const element = {
-    innerText: text, textContent: text, children, attributes,
+    innerText: text, textContent: text, children, attributes, tagName: "", clicked: false,
+    click() { this.clicked = true; },
+    scrollIntoView() {},
     getAttribute(key) { return this.attributes[key] || ""; },
     querySelectorAll(selector) {
       return this.children.flatMap(child => [child, ...child.querySelectorAll(selector)])
@@ -28,7 +30,7 @@ function node(text = "", children = [], attributes = {}) {
   return element;
 }
 function tagged(tag, text, children = [], attrs = {}, classes = []) {
-  const n = node(text, children, attrs); n.tag = tag; n.classes = classes; if (attrs.href) n.href = attrs.href;
+  const n = node(text, children, attrs); n.tag = tag; n.tagName = tag.toUpperCase(); n.classes = classes; if (attrs.href) n.href = attrs.href;
   if (tag === "section") for (const child of children) child.section = n;
   return n;
 }
@@ -65,7 +67,11 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
     URL, Date, chrome:{runtime:{onMessage:{addListener(fn){handler=fn;}}}}, window:{}};
   vm.runInNewContext(script, context);
   let response;
-  const message = messageType === "RESOLVE_COMPANY_LINK" ? {type:messageType, expectedCompany, headline:title} : {type:messageType};
+  const message = messageType === "RESOLVE_COMPANY_LINK"
+    ? {type:messageType, expectedCompany, headline:title}
+    : messageType === "CLICK_COMPANY_AFFILIATION"
+      ? {type:messageType, expectedCompany}
+      : {type:messageType};
   handler(message, {}, value => response = value);
   return response;
 }
@@ -132,4 +138,9 @@ assert.equal(danielResolved.ok, true);
 assert.equal(danielResolved.role.current_company, "VitalCura");
 assert.equal(danielResolved.role.company_url, "https://www.linkedin.com/company/vitalcura");
 
-console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, weak-single-signal, href-less-current-company + experience-link-resolution, missing-name/title/company, generic-title and missing-location guards OK");
+const danielClicked = capture({name:"Daniel Brandão",title:"Founder | CEO | Banker | Board Member | CFO | Cyclist",place:"Brasil",company:"VitalCura",slug:"vitalcura",unrelated:"Outra empresa",modern:true,companyAsButton:true,school:"Universidade de São Paulo",includeExperience:false,messageType:"CLICK_COMPANY_AFFILIATION",expectedCompany:"VitalCura"});
+assert.equal(danielClicked.ok, true);
+assert.equal(danielClicked.clicked, true);
+assert.equal(danielClicked.reason, "clicked_visible_affiliation");
+
+console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, weak-single-signal, href-less-current-company + experience-link-resolution + click-navigation-fallback, missing-name/title/company, generic-title and missing-location guards OK");
