@@ -17,10 +17,6 @@ export function proxy(request) {
     return NextResponse.redirect(new URL("/auth", request.url));
   }
 
-  if (pathname === "/auth" && hasSession) {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
-
   return NextResponse.next();
 }
 
