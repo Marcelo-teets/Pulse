@@ -62,6 +62,8 @@ jobs:
         run: npm run build
       - name: Bundle Neon LinkedIn Function
         run: node scripts/build-neon-linkedin-function.mjs
+      - name: Bundled LinkedIn API end-to-end
+        run: node scripts/test-linkedin-api-bundle.mjs
       - name: Upload Neon Function artifact
         uses: actions/upload-artifact@v4
         with:
