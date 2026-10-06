@@ -69,9 +69,7 @@ jobs:
           path: dist/pulse-linkedin-api-v0.7.2.zip
       - name: Build extension artifact
         run: node scripts/build-linkedin-extension.mjs
-      - name: Package extension
-        run: cd dist && zip -r pulse-linkedin-capture-v0.8.9.zip linkedin-capture
       - uses: actions/upload-artifact@v4
         with:
           name: pulse-full-qa-extension-v0.8.9
-          path: dist/pulse-linkedin-capture-v0.8.9.zip
+          path: dist/linkedin-capture/**
