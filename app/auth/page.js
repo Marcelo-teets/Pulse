@@ -12,11 +12,17 @@ export default function AuthPage() {
   const [signupEnabled, setSignupEnabled] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/signup", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((payload) => setSignupEnabled(!!payload.signupEnabled))
-      .catch(() => setSignupEnabled(false));
-  }, []);
+    Promise.all([
+      fetch("/api/auth/me", { cache: "no-store" }).then((response) => response.json()).catch(() => ({})),
+      fetch("/api/auth/signup", { cache: "no-store" }).then((response) => response.json()).catch(() => ({})),
+    ]).then(([auth, signup]) => {
+      if (auth.authenticated) {
+        router.replace("/");
+        return;
+      }
+      setSignupEnabled(!!signup.signupEnabled);
+    });
+  }, [router]);
 
   async function submit(event) {
     event.preventDefault();
