@@ -35,3 +35,7 @@ Extensão Chrome Manifest V3 para captura assistida de perfis do LinkedIn e dado
 6. Faça o pareamento usando o código fornecido pelo Pulse.
 7. Recarregue a aba do LinkedIn após atualizar a extensão.
 8. Abra um perfil `linkedin.com/in/...` e capture.
+
+
+## Compatibilidade
+Versões anteriores da extensão não são aceitas pela API de produção. Atualize para v0.8.9 ou superior antes de capturar.
