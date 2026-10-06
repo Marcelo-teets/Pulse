@@ -117,8 +117,13 @@ async function claimBatch(database, limit = 20) {
       WITH picked AS (
         SELECT id
         FROM public.linkedin_sheet_sync_queue
-        WHERE status IN ('pending','error')
+        WHERE (
+          status IN ('pending','error')
           AND COALESCE(next_attempt_at, NOW()) <= NOW()
+        ) OR (
+          status='processing'
+          AND COALESCE(last_attempt_at, created_at) <= NOW() - INTERVAL '15 minutes'
+        )
         ORDER BY created_at
         FOR UPDATE SKIP LOCKED
         LIMIT $1
@@ -223,10 +228,14 @@ export async function GET(request) {
     const token = await googleAccessToken();
     const payloads = await loadPayloads(database, ids);
 
-    const peopleSheet = await getValues(token, "Pessoas!A2:H1000");
-    const companiesSheet = await getValues(token, "Empresas!A2:G1000");
+    const [peopleSheet, companiesSheet, capturesSheet] = await Promise.all([
+      getValues(token, "Pessoas!A2:H"),
+      getValues(token, "Empresas!A2:G"),
+      getValues(token, "Capturas!A2:A"),
+    ]);
     const peopleRows = peopleSheet.values || [];
     const companyRows = companiesSheet.values || [];
+    const existingCaptureIds = new Set((capturesSheet.values || []).map((row) => String(row?.[0] || "").trim()).filter(Boolean));
 
     const personRowByUrl = new Map();
     peopleRows.forEach((row, index) => {
@@ -249,24 +258,27 @@ export async function GET(request) {
       const personUrl = String(item.linkedin_url || "").replace(/\/$/, "");
       const companyKey = normalizeCompanyKey(item.company_name, item.company_website);
 
-      captureRows.push([
-        item.sync_id,
-        item.person_capture_id,
-        item.full_name || "",
-        personUrl,
-        item.location || "",
-        item.current_title || "",
-        item.current_company || "",
-        item.person_captured_at ? new Date(item.person_captured_at).toISOString() : "",
-        JSON.stringify(item.raw_json || {}),
-        item.company_capture_id,
-        item.company_name || "",
-        item.company_description || "",
-        item.company_website || "",
-        item.employee_count || "",
-        item.company_captured_at ? new Date(item.company_captured_at).toISOString() : "",
-        "synced",
-      ]);
+      if (!existingCaptureIds.has(String(item.sync_id))) {
+        captureRows.push([
+          item.sync_id,
+          item.person_capture_id,
+          item.full_name || "",
+          personUrl,
+          item.location || "",
+          item.current_title || "",
+          item.current_company || "",
+          item.person_captured_at ? new Date(item.person_captured_at).toISOString() : "",
+          JSON.stringify(item.raw_json || {}),
+          item.company_capture_id,
+          item.company_name || "",
+          item.company_description || "",
+          item.company_website || "",
+          item.employee_count || "",
+          item.company_captured_at ? new Date(item.company_captured_at).toISOString() : "",
+          "synced",
+        ]);
+        existingCaptureIds.add(String(item.sync_id));
+      }
 
       const personValues = [[
         item.person_capture_id,

@@ -25,8 +25,7 @@ export async function POST(request) {
   }
 
   const masterEmail = normalizeEmail(process.env.PULSE_MASTER_EMAIL);
-  const masterCount = await db.query("SELECT count(*)::int AS total FROM public.pulse_users WHERE role = 'master'");
-  const role = masterCount.rows[0]?.total === 0 || (masterEmail && email === masterEmail) ? "master" : "user";
+  const role = masterEmail && email === masterEmail ? "master" : "user";
 
   try {
     const result = await db.query(

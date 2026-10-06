@@ -40,7 +40,7 @@ const displayNameSql = `
       people: [],
       companies: [],
       queue: [],
-    });
+    }, { status: 503 });
   }
 
   try {
@@ -129,7 +129,7 @@ const displayNameSql = `
         companies: [],
         queue: [],
       },
-      { status: 200 }
+      { status: 500 }
     );
   }
 }

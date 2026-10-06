@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: pulse-full-qa-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -14,41 +18,53 @@ jobs:
   qa:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pulse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pulse_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/pulse_test
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
+        run: npm ci --no-audit --no-fund
+      - name: Dependency vulnerability audit
+        run: npm audit --omit=dev --audit-level=high
       - name: Structural QA
         run: node scripts/qa-full.mjs
-
       - name: Extension validation
         run: node scripts/validate-linkedin-extension.mjs
-
       - name: Extension syntax
         run: |
           node --check extensions/linkedin-capture/background.js
           node --check extensions/linkedin-capture/content.js
           node --check extensions/linkedin-capture/popup.js
-
       - name: LinkedIn extractor regressions
         run: node scripts/test-linkedin-extractor.mjs
-
+      - name: Authentication unit tests
+        run: node scripts/test-auth.mjs
+      - name: Postgres integration tests
+        run: node scripts/test-db-integration.mjs
       - name: Next.js production build
         run: npm run build
-
       - name: Build extension artifact
         run: node scripts/build-linkedin-extension.mjs
-
       - name: Package extension
-        run: cd dist && zip -r pulse-linkedin-capture-v0.8.2.zip linkedin-capture
-
+        run: cd dist && zip -r pulse-linkedin-capture-v0.8.5.zip linkedin-capture
       - uses: actions/upload-artifact@v4
         with:
-          name: pulse-full-qa-extension-v0.8.2
-          path: dist/pulse-linkedin-capture-v0.8.2.zip
+          name: pulse-full-qa-extension-v0.8.5
+          path: dist/pulse-linkedin-capture-v0.8.5.zip

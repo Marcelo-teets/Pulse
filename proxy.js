@@ -6,7 +6,12 @@ export function proxy(request) {
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(path + "/"));
   const isAsset = pathname.startsWith("/_next") || pathname.includes(".");
+  const isApi = pathname.startsWith("/api/");
   const hasSession = request.cookies.has("pulse_session");
+
+  if (isApi) {
+    return NextResponse.next();
+  }
 
   if (!isPublic && !isAsset && !hasSession) {
     return NextResponse.redirect(new URL("/auth", request.url));

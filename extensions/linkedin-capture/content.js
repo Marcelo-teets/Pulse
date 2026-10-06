@@ -27,6 +27,13 @@
   const cleanCompany = (v) => norm(v).replace(/^(?:ver empresa|view company)\s*:\s*/i, "").replace(/\s*(?:\|\s*)?LinkedIn\s*$/i, "").replace(/\s+logo$/i, "");
   const cleanName = (v) => norm(v).replace(/\s*[·•]\s*\d+(?:º|st|nd|rd|th)?\s*$/i, "").replace(/\s+(?:visualizar perfil|view profile).*$/i, "");
   const cleanTitle = (v) => norm(v).replace(/\s+at\s+.+$/i, "").replace(/\s+(?:na|no|em)\s+.+$/i, "");
+  const looksLikeLocation = (v) => {
+    const value = norm(v);
+    if (!value || value.length > 120) return false;
+    if (/[|@]/.test(value)) return false;
+    if (/(?:CEO|CFO|CTO|COO|Chief|Founder|Co-Founder|Director|Diretor|Diretora|Manager|Gerente|Head|Board|Advisor|Conselheir|Investidor|Investidora|President|Presidente|Partner|Sócio|Sócia)/i.test(value)) return false;
+    return /,|\b(?:Brasil|Brazil|Portugal|United States|USA|Região|Region|Area|Área|Metropolitana|Metropolitan|Greater|State|Estado|Distrito Federal|DF)\b/i.test(value);
+  };
   const isNoise = (v) => /^(contato|contact info|conectar|connect|seguir|follow|enviar mensagem|message|mais|more|verificado|verified|grau|degree|seguidores|followers|conexões|connections)$/i.test(norm(v));
   const section = (names) => {
     const labels = names.map((n) => n.toLowerCase());
@@ -38,6 +45,15 @@
   };
 
   const validName = (v) => /\p{L}/u.test(v) && !/^(?:foto do perfil|profile photo|linkedin|perfil|profile|atividades|activity)$/i.test(v) && !/^(?:ver empresa|view company)/i.test(v);
+  const looksLikePersonName = (v) => {
+    const value = cleanName(v);
+    const words = value.split(/\s+/).filter(Boolean);
+    if (!validName(value) || words.length < 2 || words.length > 8) return false;
+    if (/[|@,:;]|\d/.test(value) || looksLikeLocation(value)) return false;
+    if (/(?:CEO|CFO|CTO|COO|Chief|Founder|Co-Founder|Director|Diretor|Diretora|Manager|Gerente|Head|Board|Advisor|Conselheir|Investidor|Investidora|President|Presidente|Partner|Sócio|Sócia|Executive|Executiv|Finance|Financial|Marketing|Sales|Operations|Technology|Engineer|Engenheir|Consultant|Consultor|Analyst|Analista|Specialist|Especialista|Vice President|\bVP\b)/i.test(value)) return false;
+    return words.every((word) => /^(?:[\p{L}][\p{L}'’.-]*|da|de|do|das|dos|e)$/u.test(word));
+  };
+
   const pageName = () => {
     const title = attr(document.querySelector('meta[property="og:title"],meta[name="title"]'), "content") || document.title;
     if (!/(?:\||[-–])\s+LinkedIn/i.test(title)) return "";
@@ -57,14 +73,15 @@
       const startsAsOtherSection = /^(?:Sobre|About|Atividades|Activity|Experiência|Experience|Formação acadêmica|Education|Licenças|Licenses)\b/i.test(rows[0] || "");
       if (startsAsOtherSection) return -100;
 
-      let points = Math.max(0, 4 - Math.min(index, 4));
+      let points = Math.max(0, 2 - Math.min(index, 2));
+      let evidence = 0;
       const directName = one([".text-heading-xlarge", ".pv-text-details__left-panel h1", "h1", "[data-anonymize='person-name']"], el);
-      if (directName && validName(cleanName(directName))) points += 6;
-      if (expected && content.includes(expected)) points += 8;
-      if (el.querySelector('img[alt*="Foto do perfil"],img[alt*="profile photo"]')) points += 3;
-      if (/(?:Dados de contato|Contact info|conexões|connections)/i.test(content)) points += 3;
-      if (el.querySelector('a[href*="/company/"]')) points += 2;
-      return points;
+      if (directName && validName(cleanName(directName))) { points += 6; evidence += 1; }
+      if (expected && content.includes(expected)) { points += 8; evidence += 1; }
+      if (el.querySelector('img[alt*="Foto do perfil"],img[alt*="profile photo"]')) { points += 3; evidence += 1; }
+      if (/(?:Dados de contato|Contact info|conexões|connections)/i.test(content)) { points += 3; evidence += 1; }
+      if (el.querySelector('a[href*="/company/"]')) { points += 2; evidence += 1; }
+      return evidence >= 2 ? points : -100;
     };
 
     let best = null;
@@ -81,9 +98,18 @@
         return el.children?.length === 0 && validName(value) && (!expected || value === expected) && !el.closest("nav,aside");
       });
     const bounded = nameNode?.closest("section,[data-view-name='profile-card']");
-    if (bounded) return bounded;
+    if (bounded) {
+      const boundedText = txt(bounded);
+      const boundedEvidence = [
+        !!expected && cleanName(txt(nameNode)) === expected,
+        !!bounded.querySelector('a[href*="/company/"]'),
+        !!bounded.querySelector('img[alt*="Foto do perfil"],img[alt*="profile photo"]'),
+        /(?:Dados de contato|Contact info|conexões|connections)/i.test(boundedText),
+      ].filter(Boolean).length;
+      if (boundedEvidence >= 2) return bounded;
+    }
 
-    throw new Error("Não foi possível isolar o cabeçalho do perfil. Aguarde a página carregar.");
+    throw new Error("Não foi possível isolar o cabeçalho do perfil com evidência suficiente. Aguarde a página carregar.");
   }
 
   function topCardLines(top) {
@@ -101,7 +127,7 @@
     for (const selector of directCandidates) {
       for (const el of top.querySelectorAll(selector)) {
         const value = cleanName(txt(el));
-        if (validName(value) && (!expected || value === expected)) return value;
+        if (looksLikePersonName(value) && (!expected || value === expected || expected.includes(value) || value.includes(expected))) return value;
       }
     }
     if (expected && txt(top).includes(expected)) return expected;
@@ -118,13 +144,14 @@
     ], "aria-label", top).replace(/^(?:Visualizar perfil de|View profile of|Perfil de|Profile of)\s+/i, ""));
     if (validName(aria)) return aria;
 
+    const firstRow = cleanName(topCardLines(top)[0] || "");
+    if (looksLikePersonName(firstRow)) return firstRow;
+
     const leafCandidates = [...top.querySelectorAll("h1,span,div")]
       .filter(el => !el.children?.length)
       .map(el => cleanName(txt(el)))
-      .filter(value => value.length >= 3 && value.length <= 90 && validName(value))
-      .filter(value => value.split(/\s+/).length >= 2 && value.split(/\s+/).length <= 8)
-      .filter(value => !/[|@]/.test(value) && !/,/.test(value))
-      .filter(value => !/(?:CEO|CFO|CTO|COO|Founder|Co-Founder|Diretor|Diretora|Director|Head|Board|Advisor|Conselheir|Investidor|Investidora|Dados de contato|Contact info|São Paulo|Brasil|Brazil|Região|University|Universidade|conexões|connections)/i.test(value));
+      .filter(looksLikePersonName)
+      .filter(value => !/(?:Dados de contato|Contact info|University|Universidade|conexões|connections)/i.test(value));
     return leafCandidates[0] || "";
   }
 
@@ -139,7 +166,8 @@
     for (const s of candidates) {
       for (const el of top.querySelectorAll(s)) {
         const value = txt(el);
-        if (value && !/(contato|contact info|seguidores|followers|conexões|connections|degree|grau)/i.test(value)) return value.replace(/\s*[·•]\s*(?:Dados de contato|Contact info).*$/i, "");
+        const cleaned = value.replace(/\s*[·•]\s*(?:Dados de contato|Contact info).*$/i, "");
+        if (cleaned && looksLikeLocation(cleaned) && !/(contato|contact info|seguidores|followers|conexões|connections|degree|grau)/i.test(cleaned)) return cleaned;
       }
     }
     const body = topCardLines(top).join(" · ");
@@ -149,11 +177,11 @@
     const contactLine = all.find(x => /(?:Dados de contato|Contact info)/i.test(x));
     if (contactLine) {
       const inline = contactLine.replace(/\s*[·•]?\s*(?:Dados de contato|Contact info).*$/i, "").trim();
-      if (inline && inline.length < 100 && !/(seguidores|followers|conexões|connections)/i.test(inline)) return inline;
+      if (inline && looksLikeLocation(inline) && !/(seguidores|followers|conexões|connections)/i.test(inline)) return inline;
       const contact = all.indexOf(contactLine);
       if (contact > 0) {
         const previous = all[contact - 1];
-        if (previous.length < 100 && !/(seguidores|followers|conexões|connections)/i.test(previous)) return previous;
+        if (looksLikeLocation(previous) && !/(seguidores|followers|conexões|connections)/i.test(previous)) return previous;
       }
     }
     return "";
@@ -168,14 +196,14 @@
     for (const s of candidates) {
       for (const el of top.querySelectorAll(s)) {
         const value = txt(el);
-        if (value && value !== fullName && value !== location && !isNoise(value)) return value;
+        if (value && value !== fullName && value !== location && !looksLikeLocation(value) && !isNoise(value)) return value;
       }
     }
     const rows = topCardLines(top);
     const index = rows.findIndex(x => cleanName(x) === fullName || x.startsWith(`${fullName} ·`));
     if (index >= 0) {
       const next = rows[index + 1];
-      if (next && next !== location && next.length < 240 && !/(?:Dados de contato|Contact info|followers|seguidores)/i.test(next)) return next;
+      if (next && next !== location && !looksLikeLocation(next) && next.length < 240 && !/(?:Dados de contato|Contact info|followers|seguidores)/i.test(next)) return next;
     }
     return "";
   }
@@ -224,6 +252,9 @@
     const location = profileLocation(top);
     const headline = profileHeadline(top, full_name, location);
     const role = topCardCompany(top, headline) || currentRole(headline);
+    if (!full_name) throw new Error("Não encontrei o nome no cabeçalho do perfil. Aguarde a página carregar.");
+    if (!headline) throw new Error("Não encontrei o cargo/headline no cabeçalho do perfil. Aguarde a página carregar.");
+    if (!role.current_company || !role.company_url) throw new Error("Não encontrei a empresa atual com link válido no perfil.");
     const captured_at = new Date().toISOString();
     const base = { full_name, linkedin_url: canonical(), location, current_title: role.current_title, current_company: role.current_company, captured_at };
     return { ...base, raw_json: { ...base }, _company_url: role.company_url };
@@ -242,9 +273,13 @@
     return null;
   }
 
-  function labelValue(labels) {
+  function companyScope() {
+    return section(["Sobre", "About", "Visão geral", "Overview"]) || document.querySelector("main") || document.body;
+  }
+
+  function labelValue(labels, root = document) {
     const wanted = labels.map((x) => x.toLowerCase());
-    for (const el of document.querySelectorAll("dt,h3,span,div")) {
+    for (const el of root.querySelectorAll("dt,h3,span,div")) {
       if (!wanted.includes(txt(el).toLowerCase())) continue;
       const parent = el.parentElement;
       const sibling = el.nextElementSibling;
@@ -255,21 +290,21 @@
     return { value: "", root: null };
   }
 
-  function website(ld) {
+  function website(ld, root) {
     if (ld?.url && !/linkedin\.com/i.test(ld.url)) return String(ld.url);
-    const lab = labelValue(["Website", "Site"]);
+    const lab = labelValue(["Website", "Site"], root);
     const link = lab.root?.querySelector('a[href^="http"]');
     if (link?.href && !/linkedin\.com/i.test(link.href)) return link.href;
-    for (const a of document.querySelectorAll('a[href^="http"]')) {
+    for (const a of root.querySelectorAll('a[href^="http"]')) {
       if (!/linkedin\.com/i.test(a.href) && /(website|site|visitar|visit)/i.test(txt(a))) return a.href;
     }
     return /^https?:\/\//i.test(lab.value) ? lab.value : "";
   }
 
-  function employeeCount() {
-    const lab = labelValue(["Company size", "Tamanho da empresa"]);
+  function employeeCount(root) {
+    const lab = labelValue(["Company size", "Tamanho da empresa"], root);
     if (lab.value) return lab.value;
-    const body = txt(document.body);
+    const body = txt(root);
     for (const re of [
       /([\d.,]+\s*[–-]\s*[\d.,]+\s+(?:employees|funcionários))/i,
       /([\d.,]+\+\s+(?:employees|funcionários))/i,
@@ -278,23 +313,28 @@
     return "";
   }
 
-  function description(ld) {
+  function description(ld, root) {
+    const vals = [...root.querySelectorAll("p,div.break-words,span.break-words")]
+      .map(txt)
+      .filter((v) => v.length >= 40 && !/(followers|seguidores|employees|funcionários)/i.test(v));
+    if (vals[0]) return vals[0];
     if (norm(ld?.description).length >= 40) return norm(ld.description);
-    const about = section(["Sobre", "About", "Visão geral", "Overview"]);
-    if (about) {
-      const vals = [...about.querySelectorAll("p,div.break-words,span.break-words")].map(txt).filter((v) => v.length >= 40);
-      if (vals[0]) return vals[0];
-    }
-    return [...document.querySelectorAll("main p,main div.break-words")].map(txt).find((v) => v.length >= 80 && !/(followers|seguidores|employees|funcionários)/i.test(v)) || "";
+    return "";
   }
 
   function extractCompany() {
+    const root = companyScope();
+    const visibleName = cleanCompany(one(["main h1",".org-top-card-summary__title","h1"]));
     const ld = jsonLdOrganization();
+    const ldName = cleanCompany(norm(ld?.name));
+    const trustedLd = !visibleName || !ldName || visibleName.toLocaleLowerCase() === ldName.toLocaleLowerCase() ? ld : null;
+    const company_name = visibleName || ldName;
+    if (!company_name) throw new Error("Não encontrei o nome da empresa na página.");
     return {
-      company_name: norm(ld?.name) || one(["h1","main h1",".org-top-card-summary__title"]),
-      description: description(ld),
-      website: website(ld),
-      employee_count: employeeCount(),
+      company_name,
+      description: description(trustedLd, root),
+      website: website(trustedLd, root),
+      employee_count: employeeCount(root),
       captured_at: new Date().toISOString()
     };
   }

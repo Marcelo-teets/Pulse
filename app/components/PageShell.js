@@ -20,8 +20,14 @@ export default function PageShell({ title, eyebrow = "PULSE CONTROL CENTER", act
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
       .then((response) => response.json())
-      .then((payload) => setUser(payload.user || null))
-      .catch(() => setUser(null));
+      .then((payload) => {
+        if (!payload.authenticated) {
+          window.location.href = "/auth";
+          return;
+        }
+        setUser(payload.user || null);
+      })
+      .catch(() => { window.location.href = "/auth"; });
   }, []);
 
   async function logout() {

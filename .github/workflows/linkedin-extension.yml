@@ -5,17 +5,27 @@ on:
     paths:
       - "extensions/linkedin-capture/**"
       - "scripts/validate-linkedin-extension.mjs"
+      - "scripts/test-linkedin-extractor.mjs"
       - ".github/workflows/linkedin-extension.yml"
   push:
     branches: [main]
     paths:
       - "extensions/linkedin-capture/**"
       - "scripts/validate-linkedin-extension.mjs"
+      - "scripts/test-linkedin-extractor.mjs"
       - ".github/workflows/linkedin-extension.yml"
+
+concurrency:
+  group: linkedin-extension-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,8 +37,8 @@ jobs:
       - run: node --check extensions/linkedin-capture/content.js
       - run: node scripts/test-linkedin-extractor.mjs
       - run: node scripts/build-linkedin-extension.mjs
-      - run: cd dist && zip -r pulse-linkedin-capture-v0.8.2.zip linkedin-capture
+      - run: cd dist && zip -r pulse-linkedin-capture-v0.8.5.zip linkedin-capture
       - uses: actions/upload-artifact@v4
         with:
-          name: pulse-linkedin-capture-v0.8.2
-          path: dist/pulse-linkedin-capture-v0.8.2.zip
+          name: pulse-linkedin-capture-v0.8.5
+          path: dist/pulse-linkedin-capture-v0.8.5.zip

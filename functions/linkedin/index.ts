@@ -94,7 +94,7 @@ function normalizeLinkedinUrl(value: unknown) {
   if (!raw) return null;
   try {
     const u = new URL(raw);
-    if (!/(^|\.)linkedin\.com$/i.test(u.hostname) || !/^\/in\//i.test(u.pathname)) return null;
+    if (!/(^|\.)linkedin\.com$/i.test(u.hostname) || !/^\/in\/[^/?#]+\/?$/i.test(u.pathname)) return null;
     u.search = "";
     u.hash = "";
     return u.toString().replace(/\/$/, "");
@@ -116,12 +116,16 @@ function validatePerson(input: any) {
   const linkedin_url = normalizeLinkedinUrl(input?.linkedin_url);
   if (!full_name) throw new Error("full_name é obrigatório");
   if (!linkedin_url) throw new Error("linkedin_url inválida");
+  const current_title = clean(input?.current_title, 1000);
+  const current_company = clean(input?.current_company, 1000);
+  if (!current_title) throw new Error("current_title é obrigatório");
+  if (!current_company) throw new Error("current_company é obrigatório");
   const person = {
     full_name,
     linkedin_url,
     location: clean(input?.location, 1000),
-    current_title: clean(input?.current_title, 1000),
-    current_company: clean(input?.current_company, 1000),
+    current_title,
+    current_company,
     captured_at: capturedAt(input?.captured_at),
   };
   return { ...person, raw_json: { ...person } };
@@ -372,9 +376,23 @@ export default {
       }
 
       if (request.method === "GET" && (path === "/" || path === "/status")) {
-        const rows = await q(
-          "SELECT (SELECT COUNT(*)::int FROM public.linkedin_profile_captures) AS person_captures,(SELECT COUNT(*)::int FROM public.linkedin_company_captures) AS company_captures,(SELECT COUNT(*)::int FROM public.linkedin_people) AS canonical_people,(SELECT COUNT(*)::int FROM public.linkedin_companies) AS canonical_companies,(SELECT COUNT(*)::int FROM public.linkedin_sheet_sync_queue WHERE status IN ('pending','error')) AS sheet_backlog"
-        );
+        const ownerScoped = auth.ownerUserId
+          ? await q(
+              `SELECT
+                (SELECT COUNT(*)::int FROM public.linkedin_profile_captures WHERE owner_user_id=$1::bigint) AS person_captures,
+                (SELECT COUNT(*)::int FROM public.linkedin_company_captures WHERE owner_user_id=$1::bigint) AS company_captures,
+                (SELECT COUNT(*)::int FROM public.pulse_user_people WHERE user_id=$1::bigint) AS canonical_people,
+                (SELECT COUNT(*)::int FROM public.pulse_user_companies WHERE user_id=$1::bigint) AS canonical_companies,
+                (SELECT COUNT(*)::int
+                   FROM public.linkedin_sheet_sync_queue q
+                   JOIN public.linkedin_profile_captures p ON p.id=q.person_capture_id
+                  WHERE p.owner_user_id=$1::bigint AND q.status IN ('pending','error','processing')) AS sheet_backlog`,
+              [auth.ownerUserId]
+            )
+          : await q(
+              "SELECT (SELECT COUNT(*)::int FROM public.linkedin_profile_captures) AS person_captures,(SELECT COUNT(*)::int FROM public.linkedin_company_captures) AS company_captures,(SELECT COUNT(*)::int FROM public.linkedin_people) AS canonical_people,(SELECT COUNT(*)::int FROM public.linkedin_companies) AS canonical_companies,(SELECT COUNT(*)::int FROM public.linkedin_sheet_sync_queue WHERE status IN ('pending','error','processing')) AS sheet_backlog"
+            );
+        const rows = ownerScoped;
         return json({
           ok: true,
           service: "pulse-linkedin-capture",
@@ -399,7 +417,7 @@ export default {
       }
 
       const requestId = clean(body?.request_id, 100);
-      if (!requestId || !/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(requestId)) {
+      if (!requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
         return json({ error: "request_id inválido" }, 400);
       }
 
