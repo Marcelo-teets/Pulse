@@ -10,8 +10,9 @@ export async function GET() {
   await ensureSchema(db);
   const masters = await db.query("SELECT count(*)::int AS total FROM public.pulse_users WHERE role='master'");
   const bootstrapNeeded = Number(masters.rows[0]?.total || 0) === 0;
+  const masterEmail = normalizeEmail(process.env.PULSE_MASTER_EMAIL);
   const publicSignup = process.env.PULSE_ALLOW_PUBLIC_SIGNUP === "true";
-  return Response.json({ ok: true, signupEnabled: publicSignup || bootstrapNeeded });
+  return Response.json({ ok: true, signupEnabled: publicSignup || (bootstrapNeeded && !!masterEmail) });
 }
 
 export async function POST(request) {
