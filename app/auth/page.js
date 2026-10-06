@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function AuthPage() {
@@ -9,6 +9,14 @@ export default function AuthPage() {
   const [form, setForm] = useState({ fullName: "", email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [signupEnabled, setSignupEnabled] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/signup", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => setSignupEnabled(!!payload.signupEnabled))
+      .catch(() => setSignupEnabled(false));
+  }, []);
 
   async function submit(event) {
     event.preventDefault();
@@ -50,7 +58,9 @@ export default function AuthPage() {
 
         <div className="segmented-control">
           <button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")} type="button">Entrar</button>
-          <button className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")} type="button">Criar conta</button>
+          {signupEnabled && (
+            <button className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")} type="button">Criar conta</button>
+          )}
         </div>
 
         <form className="auth-form" onSubmit={submit}>
