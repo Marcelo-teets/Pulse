@@ -1,4 +1,4 @@
-# Pulse LinkedIn Capture v0.8.7
+# Pulse LinkedIn Capture v0.8.9
 
 Extensão Chrome Manifest V3 para captura assistida de perfis do LinkedIn e dados da empresa atual.
 
@@ -12,7 +12,7 @@ Extensão Chrome Manifest V3 para captura assistida de perfis do LinkedIn e dado
 
 ## Captura
 - O extrator trabalha somente em `linkedin.com/in/...`.
-- Nome, cargo/headline e empresa com link válido são obrigatórios.
+- Nome, cargo/headline e uma empresa atual demonstrável no perfil são obrigatórios. A URL canônica da empresa precisa ser resolvida antes do salvamento.
 - Se a identidade do perfil não puder ser comprovada no DOM, a captura falha fechada em vez de salvar dados aproximados.
 - A empresa atual é obtida do cabeçalho ou da experiência atual, nunca de cards laterais/Atividades.
 - A página da empresa é aberta em segundo plano para coletar descrição, site e faixa de funcionários.
@@ -31,7 +31,11 @@ Extensão Chrome Manifest V3 para captura assistida de perfis do LinkedIn e dado
 2. Ative **Modo do desenvolvedor**.
 3. Clique em **Carregar sem compactação**.
 4. Selecione a pasta `extensions/linkedin-capture`.
-5. Confirme que o popup mostra **v0.8.7**.
+5. Confirme que o popup mostra **v0.8.9**.
 6. Faça o pareamento usando o código fornecido pelo Pulse.
 7. Recarregue a aba do LinkedIn após atualizar a extensão.
 8. Abra um perfil `linkedin.com/in/...` e capture.
+
+
+## Compatibilidade
+Versões anteriores da extensão não são aceitas pela API de produção. Atualize para v0.8.9 ou superior antes de capturar.

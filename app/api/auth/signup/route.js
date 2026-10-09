@@ -4,6 +4,17 @@ import { ensureSchema } from "../../../../lib/schema";
 
 export const dynamic = "force-dynamic";
 
+export async function GET() {
+  const db = getPool();
+  if (!db) return Response.json({ ok: true, signupEnabled: false });
+  await ensureSchema(db);
+  const masters = await db.query("SELECT count(*)::int AS total FROM public.pulse_users WHERE role='master'");
+  const bootstrapNeeded = Number(masters.rows[0]?.total || 0) === 0;
+  const masterEmail = normalizeEmail(process.env.PULSE_MASTER_EMAIL);
+  const publicSignup = process.env.PULSE_ALLOW_PUBLIC_SIGNUP === "true";
+  return Response.json({ ok: true, signupEnabled: publicSignup || (bootstrapNeeded && !!masterEmail) });
+}
+
 export async function POST(request) {
   const db = getPool();
   if (!db) return Response.json({ ok: false, error: "DATABASE_URL não configurada." }, { status: 503 });
@@ -25,7 +36,16 @@ export async function POST(request) {
   }
 
   const masterEmail = normalizeEmail(process.env.PULSE_MASTER_EMAIL);
-  const role = masterEmail && email === masterEmail ? "master" : "user";
+  const masters = await db.query("SELECT count(*)::int AS total FROM public.pulse_users WHERE role='master'");
+  const bootstrapNeeded = Number(masters.rows[0]?.total || 0) === 0;
+  const isBootstrapMaster = bootstrapNeeded && !!masterEmail && email === masterEmail;
+  const publicSignup = process.env.PULSE_ALLOW_PUBLIC_SIGNUP === "true";
+
+  if (!publicSignup && !isBootstrapMaster) {
+    return Response.json({ ok: false, error: "Cadastro público desativado. Solicite acesso ao administrador." }, { status: 403 });
+  }
+
+  const role = isBootstrapMaster ? "master" : "user";
 
   try {
     const result = await db.query(

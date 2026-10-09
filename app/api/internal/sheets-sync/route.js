@@ -1,5 +1,5 @@
 // Pulse Sheets sync worker — production
-const LINKEDIN_API_VERSION = "0.7.0";
+const LINKEDIN_API_VERSION = "0.7.2";
 import { createSign } from "node:crypto";
 import pg from "pg";
 
@@ -97,16 +97,21 @@ async function updateValues(token, range, values) {
   );
 }
 
-function normalizeCompanyKey(name, website) {
-  let host = "";
-  try { host = website ? new URL(website).hostname.toLowerCase().replace(/^www\./, "") : ""; } catch {}
-  const normalized = String(name || "")
+function normalizeCompanyName(name) {
+  return String(name || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
-  return `${normalized}|${host}`;
+}
+
+function normalizeCompanyKey(name, website, linkedinUrl) {
+  const linked = String(linkedinUrl || "").trim().replace(/\/$/, "").toLowerCase();
+  if (linked) return `linkedin:${linked}`;
+  let host = "";
+  try { host = website ? new URL(website).hostname.toLowerCase().replace(/^www\./, "") : ""; } catch {}
+  return `${normalizeCompanyName(name)}|${host}`;
 }
 
 async function claimBatch(database, limit = 20) {
@@ -154,7 +159,7 @@ async function loadPayloads(database, ids) {
            p.id::text AS person_capture_id,
            p.full_name,p.linkedin_url,p.location,p.current_title,p.current_company,
            p.captured_at AS person_captured_at,p.raw_json,
-           c.id::text AS company_capture_id,c.company_name,c.description AS company_description,
+           c.id::text AS company_capture_id,c.company_name,c.linkedin_url AS company_linkedin_url,c.description AS company_description,
            c.website AS company_website,c.employee_count,c.captured_at AS company_captured_at
     FROM public.linkedin_sheet_sync_queue q
     JOIN public.linkedin_profile_captures p ON p.id=q.person_capture_id
@@ -220,17 +225,19 @@ export async function GET(request) {
   }
 
   const ids = await claimBatch(database, 20);
-  if (!ids.length) {
-    return Response.json({ ok: true, processed: 0, message: "queue empty" });
-  }
 
   try {
     const token = await googleAccessToken();
+    if (!ids.length) {
+      await updateOperationalMetrics(database, token);
+      return Response.json({ ok: true, processed: 0, message: "queue empty", metricsUpdated: true });
+    }
+
     const payloads = await loadPayloads(database, ids);
 
     const [peopleSheet, companiesSheet, capturesSheet] = await Promise.all([
       getValues(token, "Pessoas!A2:H"),
-      getValues(token, "Empresas!A2:G"),
+      getValues(token, "Empresas!A2:H"),
       getValues(token, "Capturas!A2:A"),
     ]);
     const peopleRows = peopleSheet.values || [];
@@ -245,9 +252,13 @@ export async function GET(request) {
     let nextPersonRow = peopleRows.length + 2;
 
     const companyRowByKey = new Map();
+    const companyRowByName = new Map();
     companyRows.forEach((row, index) => {
-      const key = normalizeCompanyKey(row?.[2], row?.[4]);
-      if (key !== "|") companyRowByKey.set(key, index + 2);
+      const rowNumber = index + 2;
+      const key = normalizeCompanyKey(row?.[2], row?.[4], row?.[7]);
+      if (key !== "|") companyRowByKey.set(key, rowNumber);
+      const nameKey = normalizeCompanyName(row?.[2]);
+      if (nameKey && !companyRowByName.has(nameKey)) companyRowByName.set(nameKey, rowNumber);
     });
     let nextCompanyRow = companyRows.length + 2;
 
@@ -256,7 +267,8 @@ export async function GET(request) {
 
     for (const item of payloads) {
       const personUrl = String(item.linkedin_url || "").replace(/\/$/, "");
-      const companyKey = normalizeCompanyKey(item.company_name, item.company_website);
+      const companyKey = normalizeCompanyKey(item.company_name, item.company_website, item.company_linkedin_url);
+      const companyNameKey = normalizeCompanyName(item.company_name);
 
       if (!existingCaptureIds.has(String(item.sync_id))) {
         captureRows.push([
@@ -306,13 +318,16 @@ export async function GET(request) {
         item.company_website || "",
         item.employee_count || "",
         item.company_captured_at ? new Date(item.company_captured_at).toISOString() : "",
+        item.company_linkedin_url || "",
       ]];
-      const existingCompanyRow = companyRowByKey.get(companyKey);
+      const existingCompanyRow = companyRowByKey.get(companyKey) || companyRowByName.get(companyNameKey);
       if (existingCompanyRow) {
-        await updateValues(token, `Empresas!A${existingCompanyRow}:G${existingCompanyRow}`, companyValues);
+        await updateValues(token, `Empresas!A${existingCompanyRow}:H${existingCompanyRow}`, companyValues);
       } else {
-        await appendValues(token, "Empresas!A:G", companyValues);
-        companyRowByKey.set(companyKey, nextCompanyRow++);
+        await appendValues(token, "Empresas!A:H", companyValues);
+        companyRowByKey.set(companyKey, nextCompanyRow);
+        if (companyNameKey && !companyRowByName.has(companyNameKey)) companyRowByName.set(companyNameKey, nextCompanyRow);
+        nextCompanyRow++;
       }
 
       syncedIds.push(item.sync_id);

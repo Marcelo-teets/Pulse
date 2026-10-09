@@ -5,18 +5,14 @@ import { attachDatabasePool } from "@neon/functions";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
 attachDatabasePool(pool);
 
-const VERSION = "0.7.0";
+const VERSION = "0.7.2";
 const MAX_BODY_BYTES = 180_000;
-const LEGACY_TOKENS = [
-  process.env.PULSE_EXTENSION_TOKEN_LEGACY_CURRENT,
-  process.env.PULSE_EXTENSION_TOKEN_LEGACY_PREVIOUS,
-].filter(Boolean) as string[];
-const LEGACY_UNTIL = Date.parse(process.env.PULSE_LEGACY_AUTH_UNTIL || "1970-01-01T00:00:00Z");
+const MIN_EXTENSION_VERSION = "0.8.9";
 
 const headers = {
   "content-type": "application/json; charset=utf-8",
   "access-control-allow-origin": "*",
-  "access-control-allow-headers": "content-type, x-extension-token, x-pulse-device-token, x-pulse-extension-version",
+  "access-control-allow-headers": "content-type, x-pulse-device-token, x-pulse-extension-version",
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "cache-control": "no-store",
 };
@@ -28,6 +24,51 @@ const clean = (value: unknown, max = 4000) => {
   const v = value.replace(/\s+/g, " ").trim();
   return v ? v.slice(0, max) : null;
 };
+
+async function readJsonLimited(request: Request, maxBytes = MAX_BODY_BYTES) {
+  if (!request.body) {
+    const error = new Error("JSON inválido");
+    (error as any).status = 400;
+    throw error;
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel("payload too large").catch(() => {});
+        const error = new Error("Payload too large");
+        (error as any).status = 413;
+        throw error;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const buffer = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buffer.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return JSON.parse(new TextDecoder().decode(buffer));
+  } catch {
+    const error = new Error("JSON inválido");
+    (error as any).status = 400;
+    throw error;
+  }
+}
 const q = async <T = Record<string, unknown>>(
   text: string,
   values: unknown[] = [],
@@ -63,9 +104,26 @@ async function audit(
   }
 }
 
+function versionAtLeast(value: string | null, minimum: string) {
+  const parse = (input: string | null) => String(input || "").split(".").map((part) => Number(part));
+  const a = parse(value);
+  const b = parse(minimum);
+  if (a.some((n) => !Number.isInteger(n) || n < 0) || a.length < 3) return false;
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const av = a[i] || 0;
+    const bv = b[i] || 0;
+    if (av !== bv) return av > bv;
+  }
+  return true;
+}
+
 async function authenticate(request: Request) {
   const extensionVersion = clean(request.headers.get("x-pulse-extension-version"), 50);
   const deviceToken = clean(request.headers.get("x-pulse-device-token"), 500);
+
+  if (!versionAtLeast(extensionVersion, MIN_EXTENSION_VERSION)) {
+    return { ok: false, deviceId: null, ownerUserId: null, mode: null, extensionVersion, reason: "extension_outdated" };
+  }
 
   if (deviceToken) {
     const rows = await q<{ device_id: string; owner_user_id: string | null }>(
@@ -73,17 +131,38 @@ async function authenticate(request: Request) {
       [sha(deviceToken)]
     );
     if (rows.length) {
+      let ownerUserId = rows[0].owner_user_id;
+      if (!ownerUserId) {
+        const historicalOwner = await q<{ owner_user_id: string }>(
+          "SELECT owner_user_id::text FROM public.linkedin_pairing_codes WHERE used_by_device_id=$1 AND owner_user_id IS NOT NULL ORDER BY used_at DESC NULLS LAST, created_at DESC LIMIT 1",
+          [rows[0].device_id]
+        );
+        if (historicalOwner.length) {
+          ownerUserId = historicalOwner[0].owner_user_id;
+          await q(
+            "UPDATE public.linkedin_devices SET owner_user_id=$2::bigint WHERE device_id=$1 AND owner_user_id IS NULL",
+            [rows[0].device_id, ownerUserId]
+          );
+        }
+      }
+
+      if (!ownerUserId) {
+        return {
+          ok: false,
+          deviceId: rows[0].device_id,
+          ownerUserId: null,
+          mode: "device",
+          extensionVersion,
+          reason: "device_unowned"
+        };
+      }
+
       await q(
         "UPDATE public.linkedin_devices SET last_seen_at=NOW(), extension_version=COALESCE($2,extension_version) WHERE device_id=$1",
         [rows[0].device_id, extensionVersion]
       );
-      return { ok: true, deviceId: rows[0].device_id, ownerUserId: rows[0].owner_user_id, mode: "device", extensionVersion };
+      return { ok: true, deviceId: rows[0].device_id, ownerUserId, mode: "device", extensionVersion };
     }
-  }
-
-  const legacy = clean(request.headers.get("x-extension-token"), 500);
-  if (legacy && Date.now() <= LEGACY_UNTIL && LEGACY_TOKENS.includes(legacy)) {
-    return { ok: true, deviceId: "legacy-v06", ownerUserId: null, mode: "legacy", extensionVersion };
   }
 
   return { ok: false, deviceId: null, ownerUserId: null, mode: null, extensionVersion };
@@ -95,6 +174,23 @@ function normalizeLinkedinUrl(value: unknown) {
   try {
     const u = new URL(raw);
     if (!/(^|\.)linkedin\.com$/i.test(u.hostname) || !/^\/in\/[^/?#]+\/?$/i.test(u.pathname)) return null;
+    u.search = "";
+    u.hash = "";
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function normalizeLinkedinCompanyUrl(value: unknown) {
+  const raw = clean(value, 2000);
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (!/(^|\.)linkedin\.com$/i.test(u.hostname)) return null;
+    const m = u.pathname.match(/^\/company\/[^/?#]+/i);
+    if (!m) return null;
+    u.pathname = m[0];
     u.search = "";
     u.hash = "";
     return u.toString().replace(/\/$/, "");
@@ -136,8 +232,10 @@ function validateCompany(input: any, fallback: unknown) {
   if (!company_name) throw new Error("company_name é obrigatório");
   let website = clean(input?.website, 2000);
   if (website && !/^https?:\/\//i.test(website)) website = null;
+  const linkedin_url = normalizeLinkedinCompanyUrl(input?.linkedin_url);
   return {
     company_name,
+    linkedin_url,
     description: clean(input?.description, 12000),
     website,
     employee_count: clean(input?.employee_count, 500),
@@ -145,17 +243,22 @@ function validateCompany(input: any, fallback: unknown) {
   };
 }
 
-function companyKey(company: any) {
-  let host = "";
-  try {
-    host = company.website ? new URL(company.website).hostname.toLowerCase().replace(/^www\./, "") : "";
-  } catch {}
-  const name = company.company_name
+function companyNameKey(value: unknown) {
+  return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function companyKey(company: any) {
+  if (company.linkedin_url) return sha(`linkedin:${company.linkedin_url.toLowerCase()}`);
+  let host = "";
+  try {
+    host = company.website ? new URL(company.website).hostname.toLowerCase().replace(/^www\./, "") : "";
+  } catch {}
+  const name = companyNameKey(company.company_name);
   return sha(`${name}|${host}`);
 }
 
@@ -202,11 +305,12 @@ async function persist(requestId: string, person: any, company: any, ownerUserId
     const personCaptureId = personCapture[0].id;
 
     const companyCapture = await q<{ id: string }>(
-      "INSERT INTO public.linkedin_company_captures(request_id,person_capture_id,company_name,description,website,employee_count,captured_at,owner_user_id) VALUES($1,$2::bigint,$3,$4,$5,$6,$7::timestamptz,$8::bigint) RETURNING id::text",
+      "INSERT INTO public.linkedin_company_captures(request_id,person_capture_id,company_name,linkedin_url,description,website,employee_count,captured_at,owner_user_id) VALUES($1,$2::bigint,$3,$4,$5,$6,$7,$8::timestamptz,$9::bigint) RETURNING id::text",
       [
         requestId,
         personCaptureId,
         company.company_name,
+        company.linkedin_url,
         company.description,
         company.website,
         company.employee_count,
@@ -232,11 +336,33 @@ async function persist(requestId: string, person: any, company: any, ownerUserId
       client
     );
 
+    const stableCompanyKey = companyKey(company);
+    if (company.linkedin_url) {
+      const sameName = await q<{ id: string }>(
+        `SELECT id::text
+           FROM public.linkedin_companies
+          WHERE linkedin_url IS NULL
+            AND LOWER(BTRIM(company_name)) = LOWER(BTRIM($1))
+          ORDER BY last_seen_at DESC
+          LIMIT 2`,
+        [company.company_name],
+        client
+      );
+      if (sameName.length === 1) {
+        await q(
+          "UPDATE public.linkedin_companies SET linkedin_url=$2, company_key=$3 WHERE id=$1::bigint AND linkedin_url IS NULL",
+          [sameName[0].id, company.linkedin_url, stableCompanyKey],
+          client
+        );
+      }
+    }
+
     const canonicalCompany = await q<{ id: string }>(
-      "INSERT INTO public.linkedin_companies(company_key,company_name,description,website,employee_count,first_seen_at,last_seen_at,last_capture_id,owner_user_id) VALUES($1,$2,$3,$4,$5,$6::timestamptz,$6::timestamptz,$7::bigint,$8::bigint) ON CONFLICT(company_key) DO UPDATE SET company_name=EXCLUDED.company_name,description=COALESCE(EXCLUDED.description,public.linkedin_companies.description),website=COALESCE(EXCLUDED.website,public.linkedin_companies.website),employee_count=COALESCE(EXCLUDED.employee_count,public.linkedin_companies.employee_count),last_seen_at=GREATEST(public.linkedin_companies.last_seen_at,EXCLUDED.last_seen_at),last_capture_id=EXCLUDED.last_capture_id,owner_user_id=COALESCE(public.linkedin_companies.owner_user_id, EXCLUDED.owner_user_id) RETURNING id::text",
+      "INSERT INTO public.linkedin_companies(company_key,company_name,linkedin_url,description,website,employee_count,first_seen_at,last_seen_at,last_capture_id,owner_user_id) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz,$7::timestamptz,$8::bigint,$9::bigint) ON CONFLICT(company_key) DO UPDATE SET company_name=EXCLUDED.company_name,linkedin_url=COALESCE(EXCLUDED.linkedin_url,public.linkedin_companies.linkedin_url),description=COALESCE(EXCLUDED.description,public.linkedin_companies.description),website=COALESCE(EXCLUDED.website,public.linkedin_companies.website),employee_count=COALESCE(EXCLUDED.employee_count,public.linkedin_companies.employee_count),last_seen_at=GREATEST(public.linkedin_companies.last_seen_at,EXCLUDED.last_seen_at),last_capture_id=EXCLUDED.last_capture_id,owner_user_id=COALESCE(public.linkedin_companies.owner_user_id, EXCLUDED.owner_user_id) RETURNING id::text",
       [
-        companyKey(company),
+        stableCompanyKey,
         company.company_name,
+        company.linkedin_url,
         company.description,
         company.website,
         company.employee_count,
@@ -304,15 +430,18 @@ export default {
       if (request.method === "POST" && path === "/pair") {
         let body: any;
         try {
-          body = await request.json();
-        } catch {
-          return json({ error: "JSON inválido" }, 400);
+          body = await readJsonLimited(request, 16_384);
+        } catch (error: any) {
+          return json({ error: error?.message || "JSON inválido" }, error?.status || 400);
         }
 
         const code = clean(body?.pairing_code, 100);
         const deviceName = clean(body?.device_name, 200) || "Chrome";
         const extensionVersion = clean(body?.extension_version, 50) || VERSION;
         if (!code) return json({ error: "pairing_code é obrigatório" }, 400);
+        if (!versionAtLeast(extensionVersion, MIN_EXTENSION_VERSION)) {
+          return json({ error: `Atualize a extensão para v${MIN_EXTENSION_VERSION} ou superior.` }, 426);
+        }
 
         const client = await pool.connect();
         const deviceId = randomUUID();
@@ -321,7 +450,7 @@ export default {
         try {
           await client.query("BEGIN");
           const valid = await q<{ owner_user_id: string | null }>(
-            "SELECT owner_user_id::text FROM public.linkedin_pairing_codes WHERE code_hash=$1 AND used_at IS NULL AND expires_at>NOW() FOR UPDATE",
+            "SELECT owner_user_id::text FROM public.linkedin_pairing_codes WHERE code_hash=$1 AND used_at IS NULL AND expires_at>NOW() AND owner_user_id IS NOT NULL FOR UPDATE",
             [sha(code)],
             client
           );
@@ -367,12 +496,20 @@ export default {
       const auth = await authenticate(request);
       if (!auth.ok) {
         await audit("auth_failed", {
+          deviceId: auth.deviceId,
           success: false,
           httpStatus: 401,
           extensionVersion: auth.extensionVersion,
-          details: { path },
+          details: { path, reason: (auth as any).reason || "invalid_credentials" },
         });
-        return json({ error: "Unauthorized" }, 401);
+        const reason = (auth as any).reason;
+        if (reason === "extension_outdated") {
+          return json({ error: `Atualize a extensão para v${MIN_EXTENSION_VERSION} ou superior.` }, 426);
+        }
+        return json(
+          { error: reason === "device_unowned" ? "Dispositivo precisa ser pareado novamente." : "Unauthorized" },
+          401
+        );
       }
 
       if (request.method === "GET" && (path === "/" || path === "/status")) {
@@ -406,14 +543,11 @@ export default {
         return json({ error: "Not found" }, 404);
       }
 
-      const length = Number(request.headers.get("content-length") || "0");
-      if (length > MAX_BODY_BYTES) return json({ error: "Payload too large" }, 413);
-
       let body: any;
       try {
-        body = await request.json();
-      } catch {
-        return json({ error: "JSON inválido" }, 400);
+        body = await readJsonLimited(request);
+      } catch (error: any) {
+        return json({ error: error?.message || "JSON inválido" }, error?.status || 400);
       }
 
       const requestId = clean(body?.request_id, 100);
@@ -426,6 +560,9 @@ export default {
       try {
         person = validatePerson(body?.person);
         company = validateCompany(body?.company, person.current_company);
+        if (companyNameKey(person.current_company) !== companyNameKey(company.company_name)) {
+          throw new Error("current_company e company_name precisam representar a mesma empresa");
+        }
       } catch (error: any) {
         return json({ error: error.message || "Payload inválido" }, 400);
       }
@@ -443,6 +580,7 @@ export default {
           duplicate: !!result.duplicate,
           quality_score: Number.isFinite(Number(meta.quality_score)) ? Number(meta.quality_score) : null,
           missing_fields: Array.isArray(meta.missing_fields) ? meta.missing_fields.slice(0, 20) : [],
+          company_identity_overridden: meta.company_identity_overridden === true,
         },
       });
 

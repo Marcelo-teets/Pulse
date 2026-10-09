@@ -14,8 +14,9 @@ function node(text = "", children = [], attributes = {}) {
         .filter(child => selector.split(",").some(s => {
           s = s.trim();
           if (s === "h1" || s === "h2" || s === "h3") return child.tag === s;
-          if (s === "section" || s === "span" || s === "div" || s === "button" || s === "a") return child.tag === s;
-          if (s === '[role="button"]') return child.attributes?.role === "button";
+          if (s === "section" || s === "span" || s === "div" || s === "button" || s === "a" || s === "dt" || s === "p") return child.tag === s;
+          if (s === "a[href]" || s === 'a[href^="http"]') return child.tag === "a" && !!child.href;
+          if (s === '[role="button"]' || s === "[role='button']") return child.attributes?.role === "button";
           if (s.startsWith(".text-heading-xlarge")) return child.classes?.includes("text-heading-xlarge");
           if (s.includes("/company/")) return child.tag === "a" && child.href?.includes("/company/");
           if (s.includes("text-body-medium")) return child.classes?.includes("text-body-medium");
@@ -26,7 +27,12 @@ function node(text = "", children = [], attributes = {}) {
     querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
     closest(selector) { if (selector.includes("section")) return this.tag === "section" ? this : this.section || null; if (selector.includes("li")) return this.tag === "li" ? this : null; return null; }
   };
-  for (const child of children) { child.parentElement = element; child.section = element.tag === "section" ? element : element.section; }
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    child.parentElement = element;
+    child.section = element.tag === "section" ? element : element.section;
+    child.nextElementSibling = children[i + 1] || null;
+  }
   return element;
 }
 function tagged(tag, text, children = [], attrs = {}, classes = []) {
@@ -34,7 +40,7 @@ function tagged(tag, text, children = [], attrs = {}, classes = []) {
   if (tag === "section") for (const child of children) child.section = n;
   return n;
 }
-function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, school = "", includeExperience = false, messageType = "EXTRACT_PROFILE", expectedCompany = "" }) {
+function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, school = "", includeExperience = false, messageType = "EXTRACT_PROFILE", expectedCompany = "", attemptIndex = 0 }) {
   const nameNode = tagged("div", name, [], {}, modern ? [] : ["text-heading-xlarge"]);
   const header = tagged("section", "", [
     tagged("h1", "Foto do perfil"),
@@ -70,11 +76,67 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
   const message = messageType === "RESOLVE_COMPANY_LINK"
     ? {type:messageType, expectedCompany, headline:title}
     : messageType === "CLICK_COMPANY_AFFILIATION"
-      ? {type:messageType, expectedCompany}
+      ? {type:messageType, expectedCompany, attemptIndex}
       : {type:messageType};
   handler(message, {}, value => response = value);
   return response;
 }
+
+function captureCompanyPage() {
+  const descriptionText = "VitalCura acredita que viver bem é encontrar o equilíbrio entre corpo, mente e natureza. Somos uma empresa brasileira dedicada a promover saúde e vitalidade.";
+  const siteLink = tagged("a", "vitalcura.com.br", [], {href:"https://www.linkedin.com/redir/redirect?url=https%3A%2F%2Fvitalcura.com.br%2F"});
+  const overview = tagged("section", "", [
+    tagged("h2", "Visão geral"),
+    tagged("div", descriptionText),
+    tagged("h3", "Site"),
+    siteLink,
+  ]);
+  overview.innerText = `Visão geral\n${descriptionText}\nSite\nvitalcura.com.br`;
+
+  const header = tagged("section", "", [
+    tagged("h1", "VitalCura"),
+    tagged("div", "Serviços de alimentação e bebidas · São Paulo, SP · 216 seguidores · 0-1 funcionários"),
+  ]);
+  header.innerText = "VitalCura\nMais Vitalidade, mais Saúde, mais Você\nServiços de alimentação e bebidas · São Paulo, SP · 216 seguidores · 0-1 funcionários";
+
+  const sidebar = tagged("section", "páginas que as pessoas também viram", [
+    tagged("a", "The Provantech Technologies", [], {href:"https://www.linkedin.com/company/unrelated/"})
+  ]);
+  const main = tagged("main", "", [header, overview, sidebar]);
+  main.innerText = header.innerText + "\n" + overview.innerText + "\n" + sidebar.innerText;
+
+  const document = {
+    title: "VitalCura | LinkedIn",
+    body: main,
+    querySelector(selector) {
+      if (selector === "main") return main;
+      if (selector === 'link[rel="canonical"]') return {href:"https://www.linkedin.com/company/vitalcura/about/"};
+      return main.querySelector(selector);
+    },
+    querySelectorAll(selector) { return main.querySelectorAll(selector); }
+  };
+
+  let handler;
+  const context = {
+    document,
+    location:{href:"https://www.linkedin.com/company/vitalcura/about/", origin:"https://www.linkedin.com"},
+    URL, Date,
+    chrome:{runtime:{onMessage:{addListener(fn){handler=fn;}}}},
+    window:{}
+  };
+  vm.runInNewContext(script, context);
+  let response;
+  handler({type:"EXTRACT_COMPANY"}, {}, value => response = value);
+  return response;
+}
+
+const vitalCuraCompany = captureCompanyPage();
+assert.equal(vitalCuraCompany.ok, true);
+assert.equal(vitalCuraCompany.company.company_name, "VitalCura");
+assert.match(vitalCuraCompany.company.description, /equilíbrio entre corpo, mente e natureza/);
+assert.equal(vitalCuraCompany.company.website, "https://vitalcura.com.br/");
+assert.equal(vitalCuraCompany.company.employee_count, "0-1 funcionários");
+
 const guilherme = capture({name:"Guilherme Rachid",title:"CEO & Founder",place:"São José dos Campos, São Paulo, Brasil",company:"Ayude",slug:"ayude",unrelated:"PIT – Parque de Inovação"});
 assert.equal(guilherme.ok, true);
 assert.equal(guilherme.profile.full_name, "Guilherme Rachid");
@@ -142,5 +204,7 @@ const danielClicked = capture({name:"Daniel Brandão",title:"Founder | CEO | Ban
 assert.equal(danielClicked.ok, true);
 assert.equal(danielClicked.clicked, true);
 assert.equal(danielClicked.reason, "clicked_visible_affiliation");
+assert.equal(danielClicked.attempt_index, 0);
+assert.ok(danielClicked.target_count >= 1);
 
-console.log("Extractor regressions: legacy, classless, title-less, noisy top-card, weak-single-signal, href-less-current-company + experience-link-resolution + click-navigation-fallback, missing-name/title/company, generic-title and missing-location guards OK");
+console.log("Extractor regressions: VitalCura company About page, legacy, classless, title-less, noisy top-card, ranked href-less-current-company resolution, missing-name/title/company, generic-title and missing-location guards OK");

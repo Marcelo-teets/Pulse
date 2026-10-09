@@ -60,11 +60,18 @@ jobs:
         run: node scripts/test-db-integration.mjs
       - name: Next.js production build
         run: npm run build
+      - name: Bundle Neon LinkedIn Function
+        run: node scripts/build-neon-linkedin-function.mjs
+      - name: Bundled LinkedIn API end-to-end
+        run: node scripts/test-linkedin-api-bundle.mjs
+      - name: Upload Neon Function artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulse-linkedin-api-v0.7.2
+          path: dist/pulse-linkedin-api-v0.7.2.zip
       - name: Build extension artifact
         run: node scripts/build-linkedin-extension.mjs
-      - name: Package extension
-        run: cd dist && zip -r pulse-linkedin-capture-v0.8.7.zip linkedin-capture
       - uses: actions/upload-artifact@v4
         with:
-          name: pulse-full-qa-extension-v0.8.7
-          path: dist/pulse-linkedin-capture-v0.8.7.zip
+          name: pulse-full-qa-extension-v0.8.9
+          path: dist/linkedin-capture/**

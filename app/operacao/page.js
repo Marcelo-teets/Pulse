@@ -49,6 +49,14 @@ export default function OperationsPage() {
     setLoading(true);
     try {
       const response = await fetch("/api/operations", { cache: "no-store" });
+      if (response.status === 401) {
+        window.location.href = "/auth";
+        return;
+      }
+      if (response.status === 403) {
+        window.location.href = "/";
+        return;
+      }
       setData(await response.json());
     } catch {
       setData({
@@ -124,7 +132,7 @@ export default function OperationsPage() {
                     <td>{fmt(device.token_expires_at)}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="5"><div className="empty-state"><div className="empty-icon">◎</div><b>Nenhum dispositivo pareado</b><p>O primeiro Chrome v0.8.7 aparecerá aqui após o pareamento.</p></div></td></tr>
+                  <tr><td colSpan="5"><div className="empty-state"><div className="empty-icon">◎</div><b>Nenhum dispositivo pareado</b><p>O primeiro Chrome v0.8.9 aparecerá aqui após o pareamento.</p></div></td></tr>
                 )}
               </tbody>
             </table>

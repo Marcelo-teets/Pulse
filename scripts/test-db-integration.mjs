@@ -15,6 +15,8 @@ try {
   await apply("migrations/001_linkedin_capture.sql");
   await apply("migrations/002_linkedin_capture_hardening.sql");
   await apply("migrations/003_multi_user_auth.sql");
+  await apply("migrations/004_company_linkedin_identity.sql");
+  await apply("migrations/005_login_rate_limit.sql");
 
   // Simulate separate serverless cold starts initializing the same schema concurrently.
   const schemaA = await import("../lib/schema.js?instance=a");
@@ -25,7 +27,7 @@ try {
     "linkedin_profile_captures","linkedin_company_captures","linkedin_sheet_sync_queue",
     "linkedin_people","linkedin_companies","linkedin_current_roles","linkedin_devices",
     "linkedin_pairing_codes","linkedin_api_audit","pulse_users","pulse_sessions",
-    "pulse_user_people","pulse_user_companies","pulse_schema_meta"
+    "pulse_user_people","pulse_user_companies","pulse_schema_meta","pulse_login_attempts"
   ];
   const tables = await db.query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
@@ -134,11 +136,11 @@ try {
 
   await db.query(`
     INSERT INTO public.linkedin_devices(device_id,device_name,token_hash,extension_version,owner_user_id,token_expires_at)
-    VALUES ('qa-device','QA Chrome','qa-hash','0.8.7',$1,NOW()+INTERVAL '90 days')
+    VALUES ('qa-device','QA Chrome','qa-hash','0.8.9',$1,NOW()+INTERVAL '90 days')
   `, [u1]);
   await db.query(`
     INSERT INTO public.linkedin_api_audit(event_type,device_id,request_id,extension_version,success,http_status,details)
-    VALUES ('capture_saved','qa-device','00000000-0000-4000-8000-000000000001','0.8.7',true,201,'{"quality_score":100}')
+    VALUES ('capture_saved','qa-device','00000000-0000-4000-8000-000000000001','0.8.9',true,201,'{"quality_score":100}')
   `);
 
   const deviceView = await db.query("SELECT status,owner_user_id FROM public.linkedin_device_status WHERE device_id='qa-device'");
@@ -161,7 +163,11 @@ try {
   const stillThere = await db.query("SELECT count(*)::int AS n FROM public.linkedin_people");
   assert.equal(stillThere.rows[0].n, 2);
   const schemaVersion = await db.query("SELECT version FROM public.pulse_schema_meta WHERE key='runtime'");
-  assert.equal(schemaVersion.rows[0].version, 4);
+  assert.equal(schemaVersion.rows[0].version, 6);
+  const companyIdentityColumns = await db.query(
+    "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND column_name='linkedin_url' AND table_name IN ('linkedin_company_captures','linkedin_companies') ORDER BY table_name"
+  );
+  assert.equal(companyIdentityColumns.rowCount, 2);
 
   console.log("Postgres integration QA: OK");
 } finally {

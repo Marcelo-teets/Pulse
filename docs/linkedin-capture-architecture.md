@@ -1,13 +1,13 @@
 # Pulse LinkedIn Capture — arquitetura
 
 ## Fluxo
-LinkedIn -> Chrome Extension v0.8.7 -> Neon Function/API v0.7.0 -> Postgres -> fila de sincronização -> Google Sheets.
+LinkedIn -> Chrome Extension v0.8.9 -> Neon Function/API v0.7.2 -> Postgres -> fila de sincronização -> Google Sheets.
 
 ## Segurança
 A extensão não contém segredo compartilhado. O primeiro uso exige pairing code de uso único. O backend troca o código por token aleatório exclusivo do dispositivo, armazena apenas SHA-256 do token e permite revogação individual. Tokens expiram em 90 dias.
 
 ## Extração
-A extensão isola o top card do perfil por múltiplos sinais do DOM. Nome, headline/cargo e empresa atual com URL `/company/` são obrigatórios. Quando esses sinais não existem de forma confiável, a captura é interrompida. A coleta da empresa usa a página `/company/.../about/` correspondente à empresa atual.
+A extensão isola o top card do perfil por múltiplos sinais do DOM. Nome, headline/cargo e empresa atual precisam ser demonstráveis no perfil. A URL `/company/` é resolvida por link direto, Experiência ou navegação controlada do próprio chip visível da empresa; se a identidade da empresa não puder ser comprovada, a captura é interrompida. A coleta usa então a página `/company/.../about/` correspondente.
 
 ## Dados
 `linkedin_profile_captures` e `linkedin_company_captures` preservam histórico. `linkedin_people`, `linkedin_companies` e `linkedin_current_roles` mantêm estado canônico deduplicado. Metadados técnicos ficam em `linkedin_api_audit`.
