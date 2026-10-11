@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import PageShell from "../components/PageShell";
 
 function fmt(value) {
@@ -45,7 +45,7 @@ export default function OperationsPage() {
   });
   const [loading, setLoading] = useState(true);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch("/api/operations", { cache: "no-store" });
@@ -70,20 +70,20 @@ export default function OperationsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     load();
     const timer = setInterval(load, 30000);
     return () => clearInterval(timer);
-  }, []);
+  }, [load]);
 
   const s = data.summary || {};
 
   return (
     <PageShell
       title="Operação"
-      actions={<button className="ghost-button" onClick={load}>{loading ? "Atualizando…" : "Atualizar"}</button>}
+      actions={<button type="button" className="ghost-button" onClick={load}>{loading ? "Atualizando…" : "Atualizar"}</button>}
     >
       <section className="section-intro">
         <div>
