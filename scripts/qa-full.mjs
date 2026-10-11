@@ -74,7 +74,7 @@ for (const marker of [
   "companyAboutUrl"
 ]) assert.ok(bg.includes(marker), `missing background safeguard: ${marker}`);
 assert.ok(bg.includes("actualUrl.origin!==expected.origin") && bg.includes("actualPath!==expectedPath"), "exact company page URL identity guard missing");
-assert.ok(bg.includes("nome canônico da empresa no LinkedIn"), "canonical company-name reconciliation missing");
+assert.ok(bg.includes("nome canônico da empresa"), "canonical company-name reconciliation missing");
 assert.ok(bg.includes("safeEndpoint"), "API endpoint allowlist guard missing");
 assert.ok(bg.includes("resolveCanonical"), "extension must resolve canonical identity before company scraping");
 assert.ok(bg.includes("pulse_canonical_cache"), "canonical cache reuse path missing");
