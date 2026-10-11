@@ -102,7 +102,7 @@ export default function AuthPage() {
             />
           </label>
           {error && <div className="form-error">{error}</div>}
-          <button className="primary-button auth-submit" disabled={loading}>
+          <button type="submit" className="primary-button auth-submit" disabled={loading}>
             {loading ? "Processando..." : mode === "login" ? "Entrar" : "Criar conta"}
           </button>
         </form>
