@@ -32,19 +32,19 @@ try {
   assert.equal(health.status, 200);
   const healthBody = await health.json();
   assert.equal(healthBody.ok, true);
-  assert.equal(healthBody.version, "0.8.0");
+  assert.equal(healthBody.version, "0.8.1");
 
   const outdatedPair = await handler.fetch(new Request("https://qa.example/pair", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ pairing_code: pairingCode, device_name: "QA", extension_version: "0.8.9" }),
+    body: JSON.stringify({ pairing_code: pairingCode, device_name: "QA", extension_version: "0.8.8" }),
   }));
   assert.equal(outdatedPair.status, 426);
 
   const pair = await handler.fetch(new Request("https://qa.example/pair", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ pairing_code: pairingCode, device_name: "QA", extension_version: "0.9.0" }),
+    body: JSON.stringify({ pairing_code: pairingCode, device_name: "QA", extension_version: "0.9.1" }),
   }));
   assert.equal(pair.status, 201);
   const pairBody = await pair.json();
@@ -52,13 +52,13 @@ try {
 
   const authHeaders = {
     "x-pulse-device-token": pairBody.device_token,
-    "x-pulse-extension-version": "0.9.0",
+    "x-pulse-extension-version": "0.9.1",
   };
 
   const status = await handler.fetch(new Request("https://qa.example/status", { headers: authHeaders }));
   assert.equal(status.status, 200);
   const statusBody = await status.json();
-  assert.equal(statusBody.version, "0.8.0");
+  assert.equal(statusBody.version, "0.8.1");
   assert.equal(statusBody.person_captures, 0);
 
   const unresolved = await handler.fetch(new Request("https://qa.example/resolve", {
@@ -97,7 +97,7 @@ try {
       employee_count: "11-50",
       captured_at: new Date().toISOString(),
     },
-    meta: { extension_version: "0.9.0", quality_score: 100, missing_fields: [] },
+    meta: { extension_version: "0.9.1", quality_score: 100, missing_fields: [] },
   };
 
   const capture = await handler.fetch(new Request("https://qa.example/capture", {
@@ -151,7 +151,7 @@ try {
   const outdatedStatus = await handler.fetch(new Request("https://qa.example/status", {
     headers: {
       "x-pulse-device-token": pairBody.device_token,
-      "x-pulse-extension-version": "0.8.9",
+      "x-pulse-extension-version": "0.8.8",
     },
   }));
   assert.equal(outdatedStatus.status, 426);
