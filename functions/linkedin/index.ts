@@ -5,9 +5,9 @@ import { attachDatabasePool } from "@neon/functions";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
 attachDatabasePool(pool);
 
-const VERSION = "0.8.0";
+const VERSION = "0.8.1";
 const MAX_BODY_BYTES = 180_000;
-const MIN_EXTENSION_VERSION = "0.9.0";
+const MIN_EXTENSION_VERSION = "0.8.9";
 
 const headers = {
   "content-type": "application/json; charset=utf-8",
@@ -306,7 +306,7 @@ async function resolveCanonical(input: any, ownerUserId: string) {
         last_seen_at: row.last_seen_at,
       };
       if (row.company_id) {
-        company = {
+        const candidate = {
           id: row.company_id,
           company_name: row.company_name,
           linkedin_url: row.company_linkedin_url,
@@ -315,8 +315,15 @@ async function resolveCanonical(input: any, ownerUserId: string) {
           employee_count: row.employee_count,
           last_seen_at: row.company_last_seen_at,
         };
-        confidence = 100;
-        source = "person_linkedin_exact";
+        const visibleCompanyMatches = !companyHint || companyNameKey(companyHint) === companyNameKey(candidate.company_name);
+        const visibleUrlMatches = !companyUrlHint || companyUrlHint === candidate.linkedin_url;
+        if (visibleCompanyMatches && visibleUrlMatches) {
+          company = candidate;
+          confidence = 100;
+          source = "person_linkedin_exact";
+        } else {
+          source = "person_linkedin_exact_company_changed";
+        }
       }
     }
   }
@@ -355,7 +362,13 @@ async function resolveCanonical(input: any, ownerUserId: string) {
   }
 
   const fresh = company ? isFresh(company.last_seen_at) : false;
-  const complete = !!(company?.company_name && company?.linkedin_url && (company?.description || company?.website || company?.employee_count));
+  const complete = !!(
+    company?.company_name &&
+    company?.linkedin_url &&
+    company?.description &&
+    company?.website &&
+    company?.employee_count
+  );
   const reusable = !!company && confidence >= 95 && fresh && complete;
 
   return {
