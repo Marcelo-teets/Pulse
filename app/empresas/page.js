@@ -17,7 +17,23 @@ export default function EmpresasPage() {
     setLoading(true);
     try {
       const response = await fetch("/api/companies?q=" + encodeURIComponent(term), { cache: "no-store" });
-      setData(await response.json());
+      if (response.status === 401) {
+        window.location.href = "/auth";
+        return;
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setData({ items: [], total: 0, connected: false, message: payload.message || payload.error || "Falha ao consultar empresas." });
+        return;
+      }
+      setData({
+        items: Array.isArray(payload.items) ? payload.items : [],
+        total: Number(payload.total || 0),
+        connected: payload.connected !== false,
+        message: payload.message || "",
+      });
+    } catch {
+      setData({ items: [], total: 0, connected: false, message: "Não foi possível consultar empresas." });
     } finally {
       setLoading(false);
     }
