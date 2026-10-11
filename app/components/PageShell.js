@@ -67,7 +67,7 @@ export default function PageShell({ title, eyebrow = "PULSE CONTROL CENTER", act
               <small>{user?.role === "master" ? "master user" : user?.email || "Vercel + Neon"}</small>
             </div>
           </div>
-          <button className="logout-button" onClick={logout}>Sair</button>
+          <button type="button" className="logout-button" onClick={logout}>Sair</button>
           <small>Pulse · produção</small>
         </div>
       </aside>
