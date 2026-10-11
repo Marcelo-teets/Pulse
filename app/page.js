@@ -76,8 +76,30 @@ export default function Home() {
     setLoading(true);
     try {
       const response = await fetch("/api/dashboard", { cache: "no-store" });
-      const payload = await response.json();
-      setData(payload);
+      if (response.status === 401) {
+        window.location.href = "/auth";
+        return;
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setData({
+          connected: false,
+          stats: {},
+          people: [],
+          companies: [],
+          queue: [],
+          message: payload.message || payload.error || "Não foi possível consultar o backend.",
+        });
+        return;
+      }
+      setData({
+        ...payload,
+        connected: payload.connected !== false,
+        stats: payload.stats && typeof payload.stats === "object" ? payload.stats : {},
+        people: Array.isArray(payload.people) ? payload.people : [],
+        companies: Array.isArray(payload.companies) ? payload.companies : [],
+        queue: Array.isArray(payload.queue) ? payload.queue : [],
+      });
     } catch {
       setData({
         connected: false,
