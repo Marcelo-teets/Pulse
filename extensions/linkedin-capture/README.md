@@ -15,7 +15,7 @@ Extensão Chrome Manifest V3 para captura assistida de perfis do LinkedIn e dado
 - Nome, cargo/headline e uma empresa atual demonstrável no perfil são obrigatórios. A URL canônica da empresa precisa ser resolvida antes do salvamento.
 - Se a identidade do perfil não puder ser comprovada no DOM, a captura falha fechada em vez de salvar dados aproximados.
 - A empresa atual é obtida do cabeçalho ou da experiência atual, nunca de cards laterais/Atividades.
-- A página da empresa é aberta em segundo plano para coletar descrição, site e faixa de funcionários.
+- O Pulse consulta primeiro a entidade canônica. A página da empresa só é aberta em segundo plano quando o cache não é confiável, completo e recente o suficiente.
 
 ## Resiliência
 - Service worker Manifest V3.
