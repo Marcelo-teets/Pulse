@@ -159,6 +159,22 @@ assert.ok(authPage.includes("signupEnabled"), "signup visibility guard missing")
 
 const usersPage = read("app/usuarios/page.js");
 assert.ok(usersPage.includes("response.status === 403"), "user admin page must handle forbidden access");
+assert.ok(usersPage.includes("finally"), "user admin loading state must recover after failures");
+
+for (const page of ["app/pessoas/page.js", "app/empresas/page.js", "app/sincronizacao/page.js", "app/page.js"]) {
+  const source = read(page);
+  assert.ok(source.includes("response.status === 401"), `${page} must redirect expired sessions before consuming API payloads`);
+  assert.ok(source.includes("if (!response.ok)"), `${page} must handle non-success API responses`);
+  assert.ok(source.includes("catch"), `${page} must handle network failures`);
+}
+assert.ok(read("app/pessoas/page.js").includes("Array.isArray(payload.items)"), "people page must preserve a safe items array");
+assert.ok(read("app/empresas/page.js").includes("Array.isArray(payload.items)"), "companies page must preserve a safe items array");
+assert.ok(read("app/sincronizacao/page.js").includes("Array.isArray(payload.items)"), "sync page must preserve a safe items array");
+assert.ok(read("app/page.js").includes("Array.isArray(payload.people)"), "dashboard must preserve safe collection shapes");
+
+const configPage = read("app/configuracao/page.js");
+assert.ok(configPage.includes("if (!response.ok || !payload.code)"), "pairing UI must surface backend failures");
+assert.ok(configPage.includes("finally"), "pairing UI loading state must always recover");
 
 const operationsPage = read("app/operacao/page.js");
 assert.ok(operationsPage.includes("response.status === 403"), "operations page must handle forbidden access");

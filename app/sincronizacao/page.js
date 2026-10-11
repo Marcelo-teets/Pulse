@@ -27,7 +27,35 @@ export default function SyncPage() {
     setLoading(true);
     try {
       const response = await fetch("/api/sync?status=" + encodeURIComponent(nextStatus), { cache: "no-store" });
-      setData(await response.json());
+      if (response.status === 401) {
+        window.location.href = "/auth";
+        return;
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setData({
+          items: [],
+          stats: { total: 0, pending: 0, processing: 0, synced: 0, error: 0 },
+          connected: false,
+          message: payload.message || payload.error || "Falha ao consultar a fila de sincronização.",
+        });
+        return;
+      }
+      setData({
+        items: Array.isArray(payload.items) ? payload.items : [],
+        stats: payload.stats && typeof payload.stats === "object"
+          ? payload.stats
+          : { total: 0, pending: 0, processing: 0, synced: 0, error: 0 },
+        connected: payload.connected !== false,
+        message: payload.message || "",
+      });
+    } catch {
+      setData({
+        items: [],
+        stats: { total: 0, pending: 0, processing: 0, synced: 0, error: 0 },
+        connected: false,
+        message: "Não foi possível consultar a fila de sincronização.",
+      });
     } finally {
       setLoading(false);
     }

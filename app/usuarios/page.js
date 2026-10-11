@@ -16,36 +16,59 @@ export default function UsuariosPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const response = await fetch("/api/users", { cache: "no-store" });
-    if (response.status === 401) {
-      window.location.href = "/auth";
-      return;
+    try {
+      const response = await fetch("/api/users", { cache: "no-store" });
+      if (response.status === 401) {
+        window.location.href = "/auth";
+        return;
+      }
+      if (response.status === 403) {
+        window.location.href = "/";
+        return;
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setUsers([]);
+        setMessage(payload.error || "Falha ao consultar usuários.");
+        return;
+      }
+      setUsers(Array.isArray(payload.users) ? payload.users : []);
+    } catch {
+      setUsers([]);
+      setMessage("Não foi possível consultar os usuários.");
+    } finally {
+      setLoading(false);
     }
-    if (response.status === 403) {
-      window.location.href = "/";
-      return;
-    }
-    const payload = await response.json().catch(() => ({}));
-    setUsers(payload.users || []);
-    setLoading(false);
   }, []);
 
   async function createUser(event) {
     event.preventDefault();
     setMessage("");
-    const response = await fetch("/api/users", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setMessage(payload.error || "Falha ao criar usuário.");
-      return;
+    try {
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (response.status === 401) {
+        window.location.href = "/auth";
+        return;
+      }
+      if (response.status === 403) {
+        window.location.href = "/";
+        return;
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(payload.error || "Falha ao criar usuário.");
+        return;
+      }
+      setForm({ fullName: "", email: "", password: "", role: "user" });
+      setMessage("Usuário criado com sucesso.");
+      await load();
+    } catch {
+      setMessage("Não foi possível criar o usuário.");
     }
-    setForm({ fullName: "", email: "", password: "", role: "user" });
-    setMessage("Usuário criado com sucesso.");
-    load();
   }
 
   useEffect(() => { load(); }, [load]);
