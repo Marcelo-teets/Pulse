@@ -78,7 +78,7 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
     : messageType === "CLICK_COMPANY_AFFILIATION"
       ? {type:messageType, expectedCompany, attemptIndex}
       : {type:messageType};
-  handler(message, {}, value => response = value);
+  handler(message, {}, value => { response = value; });
   return response;
 }
 
@@ -126,7 +126,7 @@ function captureCompanyPage() {
   };
   vm.runInNewContext(script, context);
   let response;
-  handler({type:"EXTRACT_COMPANY"}, {}, value => response = value);
+  handler({type:"EXTRACT_COMPANY"}, {}, value => { response = value; });
   return response;
 }
 
