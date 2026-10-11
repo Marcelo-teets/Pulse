@@ -79,12 +79,14 @@ assert.ok(bg.includes("safeEndpoint"), "API endpoint allowlist guard missing");
 assert.ok(bg.includes("resolveCanonical"), "extension must resolve canonical identity before company scraping");
 assert.ok(bg.includes("pulse_canonical_cache"), "canonical cache reuse path missing");
 assert.ok(bg.includes("field_sources"), "capture provenance metadata missing");
+assert.ok(bg.includes("Number(resolution?.confidence||0)>=95"), "low-confidence resolver matches must not drive company navigation");
 assert.ok(bg.includes('candidate.protocol==="https:"&&candidate.origin===expected.origin'), "API endpoint origin pinning missing");
 assert.ok(bg.includes("for(let attemptIndex=0;attemptIndex<6;attemptIndex++)"), "multiple click-target retry loop missing");
 assert.ok(bg.includes("attemptIndex},2"), "click retry index is not sent to content script");
 
 const api = read("functions/linkedin/index.ts");
 assert.ok(api.includes('const VERSION = "0.8.1"'));
+assert.ok(api.includes('const MIN_EXTENSION_VERSION = "0.8.9"'), "previous secure extension must remain compatible during rollout");
 assert.ok(api.includes("normalizeLinkedinUrl"));
 assert.ok(api.includes("request_id inválido"));
 assert.ok(api.includes("findExisting(requestId)"));
@@ -107,6 +109,8 @@ assert.ok(api.includes("normalizeLinkedinCompanyUrl"), "stable LinkedIn company 
 assert.ok(api.includes('path === "/resolve"'), "canonical identity resolver endpoint missing");
 assert.ok(api.includes("resolveCanonical"), "canonical resolver logic missing");
 assert.ok(api.includes("FRESH_COMPANY_DAYS = 30"), "resolver freshness policy missing");
+assert.ok(api.includes("person_linkedin_exact_company_changed"), "resolver must reject stale person-company links");
+assert.ok(api.includes("company?.description") && api.includes("company?.website") && api.includes("company?.employee_count"), "cache reuse must require complete company enrichment");
 assert.ok(api.includes('linkedin_url IS NULL'), "legacy company identity reconciliation missing");
 assert.ok(api.includes('linkedin:'), "LinkedIn company URL must drive canonical identity");
 
@@ -178,9 +182,16 @@ for (const marker of [
   'const LINKEDIN_API_VERSION = "0.8.1"',
   "metricsUpdated: true"
 ]) assert.ok(worker.includes(marker), `missing Sheets worker invariant: ${marker}`);
+assert.ok(worker.includes("fetchWithTimeout"), "Google API calls must be bounded by timeouts");
+assert.ok(worker.includes("AbortSignal.timeout"), "Google API timeout signal missing");
 const emptyQueuePos = worker.indexOf("if (!ids.length)");
 const metricsPos = worker.indexOf("await updateOperationalMetrics(database, token)", emptyQueuePos);
 assert.ok(emptyQueuePos >= 0 && metricsPos > emptyQueuePos, "empty queue must still refresh operational metrics");
+
+const nextConfig = read("next.config.mjs");
+for (const header of ["X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Permissions-Policy"]) {
+  assert.ok(nextConfig.includes(header), `missing security header: ${header}`);
+}
 
 const health = read("app/api/health/route.js");
 assert.ok((health.match(/status: 503/g) || []).length >= 2, "degraded health checks must return HTTP 503");
