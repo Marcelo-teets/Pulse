@@ -1,5 +1,5 @@
 // Pulse Sheets sync worker — production
-const LINKEDIN_API_VERSION = "0.7.2";
+const LINKEDIN_API_VERSION = "0.8.0";
 import { createSign } from "node:crypto";
 import pg from "pg";
 

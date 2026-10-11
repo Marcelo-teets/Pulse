@@ -5,9 +5,9 @@ import { attachDatabasePool } from "@neon/functions";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
 attachDatabasePool(pool);
 
-const VERSION = "0.7.2";
+const VERSION = "0.8.0";
 const MAX_BODY_BYTES = 180_000;
-const MIN_EXTENSION_VERSION = "0.8.9";
+const MIN_EXTENSION_VERSION = "0.9.0";
 
 const headers = {
   "content-type": "application/json; charset=utf-8",
@@ -262,6 +262,115 @@ function companyKey(company: any) {
   return sha(`${name}|${host}`);
 }
 
+const FRESH_COMPANY_DAYS = 30;
+
+function isFresh(value: unknown, maxDays = FRESH_COMPANY_DAYS) {
+  if (!value) return false;
+  const ms = Date.parse(String(value));
+  if (!Number.isFinite(ms)) return false;
+  return Date.now() - ms <= maxDays * 86_400_000;
+}
+
+async function resolveCanonical(input: any, ownerUserId: string) {
+  const personUrl = normalizeLinkedinUrl(input?.person?.linkedin_url);
+  const fullName = clean(input?.person?.full_name, 500);
+  const companyHint = clean(input?.person?.current_company, 1000) || clean(input?.company_hint?.company_name, 1000);
+  const companyUrlHint = normalizeLinkedinCompanyUrl(input?.company_hint?.linkedin_url);
+
+  let person: any = null;
+  let company: any = null;
+  let confidence = 0;
+  let source = "none";
+
+  if (personUrl) {
+    const rows = await q(
+      `SELECT p.id::text,p.linkedin_url,p.full_name,p.location,p.current_title,p.current_company,p.last_seen_at,
+              c.id::text AS company_id,c.company_name,c.linkedin_url AS company_linkedin_url,c.description,c.website,c.employee_count,c.last_seen_at AS company_last_seen_at
+         FROM public.linkedin_people p
+         JOIN public.pulse_user_people up ON up.person_id=p.id AND up.user_id=$2::bigint
+         LEFT JOIN public.linkedin_current_roles r ON r.person_id=p.id
+         LEFT JOIN public.linkedin_companies c ON c.id=r.company_id
+        WHERE p.linkedin_url=$1
+        LIMIT 1`,
+      [personUrl, ownerUserId]
+    );
+    if (rows.length) {
+      const row: any = rows[0];
+      person = {
+        id: row.id,
+        linkedin_url: row.linkedin_url,
+        full_name: row.full_name,
+        location: row.location,
+        current_title: row.current_title,
+        current_company: row.current_company,
+        last_seen_at: row.last_seen_at,
+      };
+      if (row.company_id) {
+        company = {
+          id: row.company_id,
+          company_name: row.company_name,
+          linkedin_url: row.company_linkedin_url,
+          description: row.description,
+          website: row.website,
+          employee_count: row.employee_count,
+          last_seen_at: row.company_last_seen_at,
+        };
+        confidence = 100;
+        source = "person_linkedin_exact";
+      }
+    }
+  }
+
+  if (!company && companyUrlHint) {
+    const rows = await q(
+      `SELECT c.id::text,c.company_name,c.linkedin_url,c.description,c.website,c.employee_count,c.last_seen_at
+         FROM public.linkedin_companies c
+         JOIN public.pulse_user_companies uc ON uc.company_id=c.id AND uc.user_id=$2::bigint
+        WHERE c.linkedin_url=$1
+        LIMIT 1`,
+      [companyUrlHint, ownerUserId]
+    );
+    if (rows.length) {
+      company = rows[0];
+      confidence = 100;
+      source = "company_linkedin_exact";
+    }
+  }
+
+  if (!company && companyHint) {
+    const rows = await q(
+      `SELECT c.id::text,c.company_name,c.linkedin_url,c.description,c.website,c.employee_count,c.last_seen_at
+         FROM public.linkedin_companies c
+         JOIN public.pulse_user_companies uc ON uc.company_id=c.id AND uc.user_id=$2::bigint
+        WHERE LOWER(BTRIM(c.company_name))=LOWER(BTRIM($1))
+        ORDER BY c.last_seen_at DESC
+        LIMIT 2`,
+      [companyHint, ownerUserId]
+    );
+    if (rows.length === 1) {
+      company = rows[0];
+      confidence = fullName && person ? 92 : 85;
+      source = "company_name_unique";
+    }
+  }
+
+  const fresh = company ? isFresh(company.last_seen_at) : false;
+  const complete = !!(company?.company_name && company?.linkedin_url && (company?.description || company?.website || company?.employee_count));
+  const reusable = !!company && confidence >= 95 && fresh && complete;
+
+  return {
+    matched: !!(person || company),
+    person,
+    company,
+    confidence,
+    source,
+    fresh,
+    complete,
+    reusable,
+    freshness_days: FRESH_COMPANY_DAYS,
+  };
+}
+
 async function findExisting(requestId: string) {
   const person = await q<{ person_id: string }>(
     "SELECT id::text AS person_id FROM public.linkedin_profile_captures WHERE request_id=$1 LIMIT 1",
@@ -512,6 +621,30 @@ export default {
         );
       }
 
+      if (request.method === "POST" && path === "/resolve") {
+        let body: any;
+        try {
+          body = await readJsonLimited(request, 32_768);
+        } catch (error: any) {
+          return json({ error: error?.message || "JSON inválido" }, error?.status || 400);
+        }
+        const resolved = await resolveCanonical(body, auth.ownerUserId as string);
+        await audit("identity_resolved", {
+          deviceId: auth.deviceId,
+          extensionVersion: auth.extensionVersion,
+          success: true,
+          httpStatus: 200,
+          details: {
+            matched: resolved.matched,
+            source: resolved.source,
+            confidence: resolved.confidence,
+            reusable: resolved.reusable,
+            fresh: resolved.fresh,
+          },
+        });
+        return json({ ok: true, ...resolved });
+      }
+
       if (request.method === "GET" && (path === "/" || path === "/status")) {
         const ownerScoped = auth.ownerUserId
           ? await q(
@@ -581,6 +714,9 @@ export default {
           quality_score: Number.isFinite(Number(meta.quality_score)) ? Number(meta.quality_score) : null,
           missing_fields: Array.isArray(meta.missing_fields) ? meta.missing_fields.slice(0, 20) : [],
           company_identity_overridden: meta.company_identity_overridden === true,
+          identity_confidence: Number.isFinite(Number(meta.identity_confidence)) ? Number(meta.identity_confidence) : null,
+          resolution_source: clean(meta.resolution_source, 100),
+          field_sources: meta.field_sources && typeof meta.field_sources === "object" ? meta.field_sources : {},
         },
       });
 

@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 
 const outDir = path.resolve("dist/neon-linkedin");
 const entry = path.join(outDir, "index.mjs");
-const archive = path.resolve("dist/pulse-linkedin-api-v0.7.2.zip");
+const archive = path.resolve("dist/pulse-linkedin-api-v0.8.0.zip");
 
 await fs.rm(outDir, { recursive: true, force: true });
 await fs.mkdir(outDir, { recursive: true });
