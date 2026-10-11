@@ -28,7 +28,7 @@ async function captureCompany(companyUrl,fallbackName){const url=companyAboutUrl
 async function startCapture(tabId){try{await setState({status:"capturing_person",error:null,result:null,payload:null});const tab=await chrome.tabs.get(tabId);if(!tab?.url||!/^https:\/\/([a-z]{2,3}\.)?linkedin\.com\/in\//i.test(tab.url))throw new Error("Abra um perfil linkedin.com/in/... antes de capturar.");const pr=await sendMessageWithRetry(tabId,{type:"EXTRACT_PROFILE"});let person=completePerson(pr.profile,tab),companyUrl=person?._company_url||"";delete person._company_url;if(!person.full_name||!person.current_title||!person.current_company)throw new Error("Nome, cargo ou empresa atual sem evidência suficiente. A captura foi interrompida para evitar dados errados.");
 
 let resolution=null;try{resolution=await resolveCanonical(person,companyUrl)}catch(e){if(e?.authRequired)throw e}
-if(!companyUrl&&resolution?.company?.linkedin_url)companyUrl=resolution.company.linkedin_url;
+if(!companyUrl&&resolution?.company?.linkedin_url&&Number(resolution?.confidence||0)>=95)companyUrl=resolution.company.linkedin_url;
 
 let company=null,resolutionSource="linkedin_company_about",identityConfidence=companyUrl?100:80;
 if(resolution?.reusable&&resolution?.company){company={company_name:resolution.company.company_name,linkedin_url:resolution.company.linkedin_url,description:resolution.company.description||"",website:resolution.company.website||"",employee_count:resolution.company.employee_count||"",captured_at:new Date().toISOString()};resolutionSource="pulse_canonical_cache";identityConfidence=Number(resolution.confidence)||100;}
