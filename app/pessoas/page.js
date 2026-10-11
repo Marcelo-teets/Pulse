@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import PageShell from "../components/PageShell";
 
 function formatDate(value) {
@@ -28,7 +28,7 @@ export default function PessoasPage() {
   const [data, setData] = useState({ items: [], total: 0, connected: true });
   const [loading, setLoading] = useState(true);
 
-  async function load(term = query) {
+  const load = useCallback(async (term = "") => {
     setLoading(true);
     try {
       const response = await fetch("/api/people?q=" + encodeURIComponent(term), { cache: "no-store" });
@@ -36,14 +36,14 @@ export default function PessoasPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load(""); }, []);
+  useEffect(() => { load(""); }, [load]);
 
   return (
     <PageShell
       title="Pessoas"
-      actions={<button className="ghost-button" onClick={() => load()}>{loading ? "Atualizando…" : "Atualizar"}</button>}
+      actions={<button type="button" className="ghost-button" onClick={() => load(query)}>{loading ? "Atualizando…" : "Atualizar"}</button>}
     >
       <section className="section-intro">
         <div>
