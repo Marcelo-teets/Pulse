@@ -41,6 +41,26 @@ try {
   }));
   assert.equal(outdatedPair.status, 426);
 
+  const compatibilityCode = "PULSE-API-COMPAT-089";
+  await db.query(
+    "INSERT INTO public.linkedin_pairing_codes(code_hash,label,expires_at,owner_user_id) VALUES($1,'API Compat',NOW()+INTERVAL '20 minutes',$2)",
+    [sha(compatibilityCode), userId]
+  );
+  const compatiblePair = await handler.fetch(new Request("https://qa.example/pair", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ pairing_code: compatibilityCode, device_name: "QA Compat", extension_version: "0.8.9" }),
+  }));
+  assert.equal(compatiblePair.status, 201);
+  const compatibleBody = await compatiblePair.json();
+  const compatibleStatus = await handler.fetch(new Request("https://qa.example/status", {
+    headers: {
+      "x-pulse-device-token": compatibleBody.device_token,
+      "x-pulse-extension-version": "0.8.9",
+    },
+  }));
+  assert.equal(compatibleStatus.status, 200);
+
   const pair = await handler.fetch(new Request("https://qa.example/pair", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -129,6 +149,25 @@ try {
   assert.equal(resolvedBody.confidence, 100);
   assert.equal(resolvedBody.source, "person_linkedin_exact");
   assert.equal(resolvedBody.company.linkedin_url, "https://www.linkedin.com/company/empresa-api-qa");
+
+  const changedCompany = await handler.fetch(new Request("https://qa.example/resolve", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      person: {
+        linkedin_url: "https://www.linkedin.com/in/pessoa-api-qa",
+        full_name: "Pessoa API QA",
+        current_company: "Nova Empresa QA",
+      },
+      company_hint: { company_name: "Nova Empresa QA" },
+    }),
+  }));
+  assert.equal(changedCompany.status, 200);
+  const changedCompanyBody = await changedCompany.json();
+  assert.equal(changedCompanyBody.matched, true);
+  assert.equal(changedCompanyBody.reusable, false);
+  assert.equal(changedCompanyBody.company, null);
+  assert.equal(changedCompanyBody.source, "person_linkedin_exact_company_changed");
 
   const duplicate = await handler.fetch(new Request("https://qa.example/capture", {
     method: "POST",
