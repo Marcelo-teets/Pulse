@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import PageShell from "../components/PageShell";
 
 function formatDate(value) {
@@ -14,7 +14,7 @@ export default function UsuariosPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     const response = await fetch("/api/users", { cache: "no-store" });
     if (response.status === 401) {
@@ -28,7 +28,7 @@ export default function UsuariosPage() {
     const payload = await response.json().catch(() => ({}));
     setUsers(payload.users || []);
     setLoading(false);
-  }
+  }, []);
 
   async function createUser(event) {
     event.preventDefault();
@@ -48,7 +48,7 @@ export default function UsuariosPage() {
     load();
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <PageShell title="Usuários">
@@ -83,7 +83,7 @@ export default function UsuariosPage() {
               </select>
             </label>
             {message && <div className="form-note">{message}</div>}
-            <button className="primary-button">Criar usuário</button>
+            <button type="submit" className="primary-button">Criar usuário</button>
           </form>
         </article>
 

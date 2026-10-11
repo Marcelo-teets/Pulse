@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import PageShell from "../components/PageShell";
 
 function formatDate(value) {
@@ -23,7 +23,7 @@ export default function SyncPage() {
   });
   const [loading, setLoading] = useState(true);
 
-  async function load(nextStatus = status) {
+  const load = useCallback(async (nextStatus = "all") => {
     setLoading(true);
     try {
       const response = await fetch("/api/sync?status=" + encodeURIComponent(nextStatus), { cache: "no-store" });
@@ -31,9 +31,9 @@ export default function SyncPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { load("all"); }, []);
+  useEffect(() => { load("all"); }, [load]);
 
   function changeStatus(next) {
     setStatus(next);
@@ -45,7 +45,7 @@ export default function SyncPage() {
   return (
     <PageShell
       title="Sincronização"
-      actions={<button className="ghost-button" onClick={() => load()}>{loading ? "Atualizando…" : "Atualizar"}</button>}
+      actions={<button type="button" className="ghost-button" onClick={() => load(status)}>{loading ? "Atualizando…" : "Atualizar"}</button>}
     >
       <section className="section-intro">
         <div>
@@ -92,7 +92,7 @@ export default function SyncPage() {
               ["synced", "Sincronizados"],
               ["error", "Erros"],
             ].map(([value, label]) => (
-              <button key={value} onClick={() => changeStatus(value)} className={status === value ? "active" : ""}>{label}</button>
+              <button type="button" key={value} onClick={() => changeStatus(value)} className={status === value ? "active" : ""}>{label}</button>
             ))}
           </div>
         </div>

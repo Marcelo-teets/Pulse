@@ -1,5 +1,5 @@
 // Pulse Sheets sync worker — production
-const LINKEDIN_API_VERSION = "0.8.0";
+const LINKEDIN_API_VERSION = "0.8.1";
 import { createSign } from "node:crypto";
 import pg from "pg";
 
@@ -27,6 +27,11 @@ function b64url(value) {
   return Buffer.from(value).toString("base64url");
 }
 
+async function fetchWithTimeout(url, init = {}, timeoutMs = 12000) {
+  const signal = init.signal || AbortSignal.timeout(timeoutMs);
+  return fetch(url, { ...init, signal });
+}
+
 async function googleAccessToken() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const rawKey = process.env.GOOGLE_PRIVATE_KEY;
@@ -48,7 +53,7 @@ async function googleAccessToken() {
   const key = rawKey.replace(/\\n/g, "\n");
   const assertion = `${unsigned}.${signer.sign(key).toString("base64url")}`;
 
-  const response = await fetch("https://oauth2.googleapis.com/token", {
+  const response = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -64,7 +69,7 @@ async function googleAccessToken() {
 }
 
 async function sheetsFetch(token, path, init = {}) {
-  const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${process.env.GOOGLE_SHEET_ID}/${path}`, {
+  const response = await fetchWithTimeout(`https://sheets.googleapis.com/v4/spreadsheets/${process.env.GOOGLE_SHEET_ID}/${path}`, {
     ...init,
     headers: {
       authorization: `Bearer ${token}`,

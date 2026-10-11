@@ -38,7 +38,7 @@ export default function ConfiguracaoPage() {
           <h3>{code || "Nenhum código gerado"}</h3>
           <p>O código expira em 20 minutos. Depois de usado, a extensão recebe um token próprio por 90 dias.</p>
         </div>
-        <button className="primary-button" onClick={generateCode} disabled={loading}>
+        <button type="button" className="primary-button" onClick={generateCode} disabled={loading}>
           {loading ? "Gerando..." : "Gerar código"}
         </button>
       </article>

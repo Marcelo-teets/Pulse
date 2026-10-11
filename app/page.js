@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const navItems = [
   ["Visão geral", "⌁", "/"],
@@ -72,7 +72,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch("/api/dashboard", { cache: "no-store" });
@@ -90,7 +90,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
@@ -106,7 +106,7 @@ export default function Home() {
     refresh();
     const timer = setInterval(refresh, 30000);
     return () => clearInterval(timer);
-  }, []);
+  }, [refresh]);
 
   const filteredPeople = useMemo(() => {
     const items = data?.people || [];
@@ -161,7 +161,7 @@ export default function Home() {
               <small>{user?.role === "master" ? "master user" : user?.email || "Vercel + Neon"}</small>
             </div>
           </div>
-          <button className="logout-button" onClick={logout}>Sair</button>
+          <button type="button" className="logout-button" onClick={logout}>Sair</button>
           <small>Pulse · produção</small>
         </div>
       </aside>
@@ -173,7 +173,7 @@ export default function Home() {
             <h1>{active}</h1>
           </div>
           <div className="topbar-actions">
-            <button className="ghost-button" onClick={refresh}>
+            <button type="button" className="ghost-button" onClick={refresh}>
               {loading ? "Atualizando…" : "Atualizar"}
             </button>
             <a className="primary-button" href="https://www.linkedin.com" target="_blank" rel="noreferrer">

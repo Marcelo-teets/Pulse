@@ -32,19 +32,39 @@ try {
   assert.equal(health.status, 200);
   const healthBody = await health.json();
   assert.equal(healthBody.ok, true);
-  assert.equal(healthBody.version, "0.8.0");
+  assert.equal(healthBody.version, "0.8.1");
 
   const outdatedPair = await handler.fetch(new Request("https://qa.example/pair", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ pairing_code: pairingCode, device_name: "QA", extension_version: "0.8.9" }),
+    body: JSON.stringify({ pairing_code: pairingCode, device_name: "QA", extension_version: "0.8.8" }),
   }));
   assert.equal(outdatedPair.status, 426);
+
+  const compatibilityCode = "PULSE-API-COMPAT-089";
+  await db.query(
+    "INSERT INTO public.linkedin_pairing_codes(code_hash,label,expires_at,owner_user_id) VALUES($1,'API Compat',NOW()+INTERVAL '20 minutes',$2)",
+    [sha(compatibilityCode), userId]
+  );
+  const compatiblePair = await handler.fetch(new Request("https://qa.example/pair", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ pairing_code: compatibilityCode, device_name: "QA Compat", extension_version: "0.8.9" }),
+  }));
+  assert.equal(compatiblePair.status, 201);
+  const compatibleBody = await compatiblePair.json();
+  const compatibleStatus = await handler.fetch(new Request("https://qa.example/status", {
+    headers: {
+      "x-pulse-device-token": compatibleBody.device_token,
+      "x-pulse-extension-version": "0.8.9",
+    },
+  }));
+  assert.equal(compatibleStatus.status, 200);
 
   const pair = await handler.fetch(new Request("https://qa.example/pair", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ pairing_code: pairingCode, device_name: "QA", extension_version: "0.9.0" }),
+    body: JSON.stringify({ pairing_code: pairingCode, device_name: "QA", extension_version: "0.9.1" }),
   }));
   assert.equal(pair.status, 201);
   const pairBody = await pair.json();
@@ -52,13 +72,13 @@ try {
 
   const authHeaders = {
     "x-pulse-device-token": pairBody.device_token,
-    "x-pulse-extension-version": "0.9.0",
+    "x-pulse-extension-version": "0.9.1",
   };
 
   const status = await handler.fetch(new Request("https://qa.example/status", { headers: authHeaders }));
   assert.equal(status.status, 200);
   const statusBody = await status.json();
-  assert.equal(statusBody.version, "0.8.0");
+  assert.equal(statusBody.version, "0.8.1");
   assert.equal(statusBody.person_captures, 0);
 
   const unresolved = await handler.fetch(new Request("https://qa.example/resolve", {
@@ -97,7 +117,7 @@ try {
       employee_count: "11-50",
       captured_at: new Date().toISOString(),
     },
-    meta: { extension_version: "0.9.0", quality_score: 100, missing_fields: [] },
+    meta: { extension_version: "0.9.1", quality_score: 100, missing_fields: [] },
   };
 
   const capture = await handler.fetch(new Request("https://qa.example/capture", {
@@ -130,6 +150,25 @@ try {
   assert.equal(resolvedBody.source, "person_linkedin_exact");
   assert.equal(resolvedBody.company.linkedin_url, "https://www.linkedin.com/company/empresa-api-qa");
 
+  const changedCompany = await handler.fetch(new Request("https://qa.example/resolve", {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "application/json" },
+    body: JSON.stringify({
+      person: {
+        linkedin_url: "https://www.linkedin.com/in/pessoa-api-qa",
+        full_name: "Pessoa API QA",
+        current_company: "Nova Empresa QA",
+      },
+      company_hint: { company_name: "Nova Empresa QA" },
+    }),
+  }));
+  assert.equal(changedCompany.status, 200);
+  const changedCompanyBody = await changedCompany.json();
+  assert.equal(changedCompanyBody.matched, true);
+  assert.equal(changedCompanyBody.reusable, false);
+  assert.equal(changedCompanyBody.company, null);
+  assert.equal(changedCompanyBody.source, "person_linkedin_exact_company_changed");
+
   const duplicate = await handler.fetch(new Request("https://qa.example/capture", {
     method: "POST",
     headers: { ...authHeaders, "content-type": "application/json" },
@@ -151,7 +190,7 @@ try {
   const outdatedStatus = await handler.fetch(new Request("https://qa.example/status", {
     headers: {
       "x-pulse-device-token": pairBody.device_token,
-      "x-pulse-extension-version": "0.8.9",
+      "x-pulse-extension-version": "0.8.8",
     },
   }));
   assert.equal(outdatedStatus.status, 426);
