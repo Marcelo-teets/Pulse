@@ -701,8 +701,8 @@ export default {
         return json({ error: "request_id inválido" }, 400);
       }
 
-      let person;
-      let company;
+      let person: ReturnType<typeof validatePerson>;
+      let company: ReturnType<typeof validateCompany>;
       try {
         person = validatePerson(body?.person);
         company = validateCompany(body?.company, person.current_company);
