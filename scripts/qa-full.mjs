@@ -28,7 +28,7 @@ critical.forEach(exists);
 
 const manifest = JSON.parse(read("extensions/linkedin-capture/manifest.json"));
 assert.equal(manifest.manifest_version, 3);
-assert.equal(manifest.version, "0.8.9");
+assert.equal(manifest.version, "0.9.0");
 assert.ok(manifest.permissions.includes("scripting"));
 assert.ok(manifest.content_scripts.some((x) => x.matches.some((m) => m.includes("linkedin.com/in/"))));
 
@@ -76,12 +76,15 @@ for (const marker of [
 assert.ok(bg.includes("actualUrl.origin!==expected.origin") && bg.includes("actualPath!==expectedPath"), "exact company page URL identity guard missing");
 assert.ok(bg.includes("nome canônico da empresa no LinkedIn"), "canonical company-name reconciliation missing");
 assert.ok(bg.includes("safeEndpoint"), "API endpoint allowlist guard missing");
+assert.ok(bg.includes("resolveCanonical"), "extension must resolve canonical identity before company scraping");
+assert.ok(bg.includes("pulse_canonical_cache"), "canonical cache reuse path missing");
+assert.ok(bg.includes("field_sources"), "capture provenance metadata missing");
 assert.ok(bg.includes('candidate.protocol==="https:"&&candidate.origin===expected.origin'), "API endpoint origin pinning missing");
 assert.ok(bg.includes("for(let attemptIndex=0;attemptIndex<6;attemptIndex++)"), "multiple click-target retry loop missing");
 assert.ok(bg.includes("attemptIndex},2"), "click retry index is not sent to content script");
 
 const api = read("functions/linkedin/index.ts");
-assert.ok(api.includes('const VERSION = "0.7.2"'));
+assert.ok(api.includes('const VERSION = "0.8.0"'));
 assert.ok(api.includes("normalizeLinkedinUrl"));
 assert.ok(api.includes("request_id inválido"));
 assert.ok(api.includes("findExisting(requestId)"));
@@ -101,6 +104,9 @@ assert.ok(api.includes("used_by_device_id=$1"), "historical pairing ownership re
 assert.ok(api.includes('reason: "device_unowned"'), "unowned device fail-closed reason missing");
 assert.ok(api.includes("owner_user_id=$2::bigint"), "device ownership self-heal update missing");
 assert.ok(api.includes("normalizeLinkedinCompanyUrl"), "stable LinkedIn company URL validation missing");
+assert.ok(api.includes('path === "/resolve"'), "canonical identity resolver endpoint missing");
+assert.ok(api.includes("resolveCanonical"), "canonical resolver logic missing");
+assert.ok(api.includes("FRESH_COMPANY_DAYS = 30"), "resolver freshness policy missing");
 assert.ok(api.includes('linkedin_url IS NULL'), "legacy company identity reconciliation missing");
 assert.ok(api.includes('linkedin:'), "LinkedIn company URL must drive canonical identity");
 
@@ -169,7 +175,7 @@ for (const marker of [
   "existingCaptureIds",
   "company_linkedin_url",
   "companyRowByName",
-  'const LINKEDIN_API_VERSION = "0.7.2"',
+  'const LINKEDIN_API_VERSION = "0.8.0"',
   "metricsUpdated: true"
 ]) assert.ok(worker.includes(marker), `missing Sheets worker invariant: ${marker}`);
 const emptyQueuePos = worker.indexOf("if (!ids.length)");
@@ -197,12 +203,12 @@ assert.equal(vercel.installCommand, "npm ci --no-audit --no-fund");
 const neonBuilder = read("scripts/build-neon-linkedin-function.mjs");
 assert.ok(neonBuilder.includes("esbuild@0.25.10"), "Neon function bundler must pin esbuild");
 assert.ok(neonBuilder.includes("--target=node24"), "Neon function target must be Node 24");
-assert.ok(neonBuilder.includes("pulse-linkedin-api-v0.7.2.zip"), "Neon function artifact version mismatch");
+assert.ok(neonBuilder.includes("pulse-linkedin-api-v0.8.0.zip"), "Neon function artifact version mismatch");
 
 const fullQa = read(".github/workflows/full-qa.yml");
 assert.ok(fullQa.includes("Bundle Neon LinkedIn Function"), "Full QA must compile Neon Function");
 assert.ok(fullQa.includes("Bundled LinkedIn API end-to-end"), "Full QA must execute the bundled LinkedIn API against Postgres");
-assert.ok(fullQa.includes("pulse-linkedin-api-v0.7.2"), "Full QA must publish Neon Function artifact");
+assert.ok(fullQa.includes("pulse-linkedin-api-v0.8.0"), "Full QA must publish Neon Function artifact");
 assert.ok(fullQa.includes("path: dist/linkedin-capture/**"), "extension artifact must expose manifest at archive root");
 assert.ok(!fullQa.includes("zip -r pulse-linkedin-capture"), "extension artifact must not be nested in a second ZIP");
 
@@ -221,9 +227,9 @@ for (const file of scanFiles) {
 }
 
 const extensionReadme = read("extensions/linkedin-capture/README.md");
-assert.ok(extensionReadme.includes("v0.8.9"), "extension README version is stale");
+assert.ok(extensionReadme.includes("v0.9.0"), "extension README version is stale");
 const architecture = read("docs/linkedin-capture-architecture.md");
-assert.ok(architecture.includes("v0.8.9"), "architecture extension version is stale");
-assert.ok(architecture.includes("API v0.7.2"), "architecture API version is stale");
+assert.ok(architecture.includes("v0.9.0"), "architecture extension version is stale");
+assert.ok(architecture.includes("API v0.8.0"), "architecture API version is stale");
 
 console.log("Pulse full structural QA: OK");
