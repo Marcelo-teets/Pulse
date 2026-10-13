@@ -1,18 +1,9 @@
 import pg from "pg";
-import { inspectSheetsConnection } from "../../../lib/sheets-health.js";
 
 export const dynamic = "force-dynamic";
 const { Pool } = pg;
 
-export async function GET(request) {
-  // Read-only diagnostics are available only to Vercel Preview, never production.
-  if (process.env.VERCEL_ENV === "preview" && new URL(request.url).searchParams.get("sheets_probe") === "1") {
-    const sheets = await inspectSheetsConnection();
-    return Response.json({ app: "pulse", target: "preview-environment", sheets }, {
-      status: sheets.state === "ready" ? 200 : 503,
-      headers: { "cache-control": "no-store" },
-    });
-  }
+export async function GET() {
   const startedAt = Date.now();
 
   if (!process.env.DATABASE_URL) {
