@@ -56,6 +56,8 @@ jobs:
         run: node scripts/test-linkedin-extractor.mjs
       - name: Authentication unit tests
         run: node scripts/test-auth.mjs
+      - name: Sheets identity regression tests
+        run: node scripts/test-sheets-company-match.mjs
       - name: Postgres integration tests
         run: node scripts/test-db-integration.mjs
       - name: Next.js production build
