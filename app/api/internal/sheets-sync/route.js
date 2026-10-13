@@ -2,6 +2,7 @@
 const LINKEDIN_API_VERSION = "0.8.1";
 import { createSign } from "node:crypto";
 import pg from "pg";
+import { findCompanySheetRow } from "../../../../lib/sheets-company-match.js";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -102,23 +103,6 @@ async function updateValues(token, range, values) {
   );
 }
 
-function normalizeCompanyName(name) {
-  return String(name || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function normalizeCompanyKey(name, website, linkedinUrl) {
-  const linked = String(linkedinUrl || "").trim().replace(/\/$/, "").toLowerCase();
-  if (linked) return `linkedin:${linked}`;
-  let host = "";
-  try { host = website ? new URL(website).hostname.toLowerCase().replace(/^www\./, "") : ""; } catch {}
-  return `${normalizeCompanyName(name)}|${host}`;
-}
-
 async function claimBatch(database, limit = 20) {
   const client = await database.connect();
   try {
@@ -191,7 +175,7 @@ async function markError(database, ids, error) {
     UPDATE public.linkedin_sheet_sync_queue
     SET status='error',
         last_error=$2,
-        next_attempt_at=NOW() + (LEAST(GREATEST(attempts,1),8) * INTERVAL '15 minutes')
+        next_attempt_at=NOW() + (POWER(2, LEAST(GREATEST(attempts,1),8)-1) * INTERVAL '15 minutes')
     WHERE id = ANY($1::bigint[])
   `, [ids, message]);
 }
@@ -256,24 +240,13 @@ export async function GET(request) {
     });
     let nextPersonRow = peopleRows.length + 2;
 
-    const companyRowByKey = new Map();
-    const companyRowByName = new Map();
-    companyRows.forEach((row, index) => {
-      const rowNumber = index + 2;
-      const key = normalizeCompanyKey(row?.[2], row?.[4], row?.[7]);
-      if (key !== "|") companyRowByKey.set(key, rowNumber);
-      const nameKey = normalizeCompanyName(row?.[2]);
-      if (nameKey && !companyRowByName.has(nameKey)) companyRowByName.set(nameKey, rowNumber);
-    });
-    let nextCompanyRow = companyRows.length + 2;
-
+    // Match against the complete current sheet, including rows appended in this batch.
+    // Canonical LinkedIn URL wins; duplicate company names are never enough.
     const captureRows = [];
     const syncedIds = [];
 
     for (const item of payloads) {
       const personUrl = String(item.linkedin_url || "").replace(/\/$/, "");
-      const companyKey = normalizeCompanyKey(item.company_name, item.company_website, item.company_linkedin_url);
-      const companyNameKey = normalizeCompanyName(item.company_name);
 
       if (!existingCaptureIds.has(String(item.sync_id))) {
         captureRows.push([
@@ -325,14 +298,13 @@ export async function GET(request) {
         item.company_captured_at ? new Date(item.company_captured_at).toISOString() : "",
         item.company_linkedin_url || "",
       ]];
-      const existingCompanyRow = companyRowByKey.get(companyKey) || companyRowByName.get(companyNameKey);
-      if (existingCompanyRow) {
+      const existingCompanyRow = findCompanySheetRow(companyRows, item);
+      if (existingCompanyRow !== null) {
         await updateValues(token, `Empresas!A${existingCompanyRow}:H${existingCompanyRow}`, companyValues);
+        companyRows[existingCompanyRow - 2] = companyValues[0];
       } else {
         await appendValues(token, "Empresas!A:H", companyValues);
-        companyRowByKey.set(companyKey, nextCompanyRow);
-        if (companyNameKey && !companyRowByName.has(companyNameKey)) companyRowByName.set(companyNameKey, nextCompanyRow);
-        nextCompanyRow++;
+        companyRows.push(companyValues[0]);
       }
 
       syncedIds.push(item.sync_id);

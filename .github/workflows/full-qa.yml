@@ -54,8 +54,12 @@ jobs:
           node --check extensions/linkedin-capture/popup.js
       - name: LinkedIn extractor regressions
         run: node scripts/test-linkedin-extractor.mjs
+      - name: Pulse quality and prospecting regression tests
+        run: node scripts/test-pulse-intelligence.mjs
       - name: Authentication unit tests
         run: node scripts/test-auth.mjs
+      - name: Sheets identity regression tests
+        run: node scripts/test-sheets-company-match.mjs
       - name: Postgres integration tests
         run: node scripts/test-db-integration.mjs
       - name: Next.js production build
@@ -73,5 +77,5 @@ jobs:
         run: node scripts/build-linkedin-extension.mjs
       - uses: actions/upload-artifact@v4
         with:
-          name: pulse-full-qa-extension-v0.9.1
+          name: pulse-full-qa-extension-v0.9.2
           path: dist/linkedin-capture/**

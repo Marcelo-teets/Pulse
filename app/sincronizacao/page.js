@@ -22,6 +22,9 @@ export default function SyncPage() {
     connected: true,
   });
   const [loading, setLoading] = useState(true);
+  const [recovering, setRecovering] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [isMaster, setIsMaster] = useState(false);
 
   const load = useCallback(async (nextStatus = "all") => {
     setLoading(true);
@@ -61,7 +64,22 @@ export default function SyncPage() {
     }
   }, []);
 
-  useEffect(() => { load("all"); }, [load]);
+  useEffect(() => {
+    load("all");
+    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((payload) => setIsMaster(payload.user?.role === "master")).catch(() => {});
+  }, [load]);
+
+  async function recover() {
+    setRecovering(true); setNotice("");
+    try {
+      const response = await fetch("/api/sync/retry", { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Falha ao reprocessar.");
+      setNotice("Processadas: " + (payload.processed || 0) + " · Reagendadas: " + (payload.reactivated || 0));
+      await load(status);
+    } catch (error) { setNotice(error.message); }
+    finally { setRecovering(false); }
+  }
 
   function changeStatus(next) {
     setStatus(next);
@@ -86,6 +104,8 @@ export default function SyncPage() {
           <strong>{stats.total ?? 0}</strong>
         </div>
       </section>
+
+      {isMaster && <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 18 }}><button type="button" className="ghost-button" disabled={recovering} onClick={recover}>{recovering ? "Reprocessando…" : "Reprocessar fila agora"}</button><span role="status">{notice}</span></div>}
 
       <section className="metrics-grid sync-metrics">
         <article className="metric-card">
