@@ -21,7 +21,12 @@
     } catch { return location.href; }
   };
   const companyUrl = (href) => {
-    try { const u = new URL(href, location.origin); const m = u.pathname.match(/^\/company\/[^/?#]+/i); return m ? `${u.origin}${m[0]}` : ""; } catch { return ""; }
+    try {
+      const u = new URL(href, location.origin);
+      if (u.protocol !== "https:" || !/(^|\.)linkedin\.com$/i.test(u.hostname)) return "";
+      const m = u.pathname.match(/^\/company\/[^/?#]+/i);
+      return m ? `${u.origin}${m[0]}` : "";
+    } catch { return ""; }
   };
   const lines = (el) => [...new Set(String(el?.innerText || el?.textContent || "").split("\n").map(norm).filter(Boolean))];
   const cleanCompany = (v) => norm(v).replace(/^(?:ver empresa|view company)\s*:\s*/i, "").replace(/\s*(?:\|\s*)?LinkedIn\s*$/i, "").replace(/\s+logo$/i, "");
