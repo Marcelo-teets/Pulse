@@ -7,6 +7,8 @@ const navItems = [
   ["Visão geral", "⌁", "/"],
   ["Pessoas", "◎", "/pessoas"],
   ["Empresas", "▦", "/empresas"],
+  ["Inteligência DCM", "◇", "/inteligencia"],
+  ["Qualidade", "✓", "/qualidade", "master"],
   ["Sincronização", "↻", "/sincronizacao"],
   ["Operação", "◫", "/operacao", "master"],
   ["Configuração", "⚙", "/configuracao"],
