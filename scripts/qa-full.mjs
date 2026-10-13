@@ -21,6 +21,8 @@ const critical = [
   "vercel.json",
   "scripts/build-neon-linkedin-function.mjs",
   "scripts/test-linkedin-api-bundle.mjs",
+  "scripts/test-sheets-company-match.mjs",
+  "lib/sheets-company-match.js",
   "migrations/004_company_linkedin_identity.sql",
   "migrations/005_login_rate_limit.sql"
 ];
