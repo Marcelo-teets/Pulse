@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { companyLinkedinKey, findCompanySheetRow } from "../lib/sheets-company-match.js";
+import { companyLinkedinKey, findCompanySheetRow, indexPeopleSheetRows, appendedSheetRow } from "../lib/sheets-company-match.js";
 
 const company = (name, website, linkedinUrl = "") => ["1", "2", name, "", website, "", "", linkedinUrl];
 const input = (name, website, linkedinUrl = "") => ({
@@ -33,3 +33,19 @@ assert.throws(
   /LinkedIn duplicado/,
 );
 console.log("Sheets canonical-company matching regressions: OK");
+
+const people=[
+  ["1","Ana Silva","https://br.linkedin.com/in/ANA-Silva/?trk=foo"],
+  ["2","Bruno Souza","https://www.linkedin.com/in/bruno-souza/"]
+];
+const indexed=indexPeopleSheetRows(people);
+assert.equal(indexed.get("https://www.linkedin.com/in/ana-silva"),2);
+assert.equal(indexed.get("https://www.linkedin.com/in/bruno-souza"),3);
+assert.throws(()=>indexPeopleSheetRows([...people,["3","Outra Ana","https://www.linkedin.com/in/ana-silva"]]),/LinkedIn duplicado em Pessoas/);
+assert.throws(()=>indexPeopleSheetRows([["1","Evil","https://linkedin.com.evil.example/in/ana"]]),/LinkedIn inválido/);
+assert.equal(appendedSheetRow({updates:{updatedRange:"'Pessoas'!A12:H12"}},"Pessoas"),12);
+assert.equal(appendedSheetRow({updates:{updatedRange:"Empresas!A4:H4"}},"Empresas"),4);
+assert.throws(()=>appendedSheetRow({updates:{updatedRange:"Empresas!A4:H4"}},"Pessoas"),/não confirmou/);
+assert.throws(()=>appendedSheetRow({updates:{updatedRange:"Pessoas!A1:H1"}},"Pessoas"),/não confirmou/);
+assert.throws(()=>appendedSheetRow({},"Empresas"),/não confirmou/);
+console.log("Sheets person identity and real append row regressions: OK");
