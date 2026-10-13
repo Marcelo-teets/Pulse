@@ -27,7 +27,7 @@ try {
     "linkedin_profile_captures","linkedin_company_captures","linkedin_sheet_sync_queue",
     "linkedin_people","linkedin_companies","linkedin_current_roles","linkedin_devices",
     "linkedin_pairing_codes","linkedin_api_audit","pulse_users","pulse_sessions",
-    "pulse_user_people","pulse_user_companies","pulse_schema_meta","pulse_login_attempts"
+    "pulse_user_people","pulse_user_companies","pulse_schema_meta","pulse_login_attempts", "pulse_capture_reviews", "pulse_role_events"
   ];
   const tables = await db.query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
@@ -157,13 +157,22 @@ try {
   assert.equal(Number(ops.rows[0].unique_companies), 1);
   assert.equal(Number(ops.rows[0].active_devices), 1);
 
+  // Quality review and role-event persistence on real Postgres.
+  await db.query("INSERT INTO public.pulse_capture_reviews(capture_id,field_key,verdict,reviewer_id) VALUES($1,'full_name','correct',$2)",[pc1,u1]);
+  const reviews=await db.query("SELECT field_key,verdict FROM public.pulse_capture_reviews WHERE capture_id=$1",[pc1]);
+  assert.equal(reviews.rows[0].verdict,"correct");
+  const role0=await db.query("SELECT count(*)::int n FROM public.pulse_role_events WHERE person_id=$1",[cp1.rows[0].id]);
+  assert.equal(role0.rows[0].n,1);
+  await db.query("UPDATE public.linkedin_current_roles SET current_title='COO' WHERE person_id=$1",[cp1.rows[0].id]);
+  const role1=await db.query("SELECT count(*)::int n FROM public.pulse_role_events WHERE person_id=$1",[cp1.rows[0].id]);
+  assert.equal(role1.rows[0].n,2);
   // Schema initialization must remain safe after data already exists.
   const schemaC = await import("../lib/schema.js?instance=c");
   await schemaC.ensureSchema(db);
   const stillThere = await db.query("SELECT count(*)::int AS n FROM public.linkedin_people");
   assert.equal(stillThere.rows[0].n, 2);
   const schemaVersion = await db.query("SELECT version FROM public.pulse_schema_meta WHERE key='runtime'");
-  assert.equal(schemaVersion.rows[0].version, 6);
+  assert.equal(schemaVersion.rows[0].version, 7);
   const companyIdentityColumns = await db.query(
     "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND column_name='linkedin_url' AND table_name IN ('linkedin_company_captures','linkedin_companies') ORDER BY table_name"
   );
