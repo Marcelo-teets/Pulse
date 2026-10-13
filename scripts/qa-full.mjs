@@ -30,6 +30,7 @@ const critical = [
   "lib/dcm-fit.js",
   "lib/csv-safe.js"
 ];
+critical.push("app/api/quality/route.js","app/api/intelligence/route.js","app/api/intelligence/export/route.js","app/api/operations/retry/route.js","app/api/operations/health/route.js","app/qualidade/page.js","app/inteligencia/page.js","scripts/test-pulse-quality.mjs");
 critical.forEach(exists);
 
 const manifest = JSON.parse(read("extensions/linkedin-capture/manifest.json"));
