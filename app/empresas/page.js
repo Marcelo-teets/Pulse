@@ -48,7 +48,7 @@ export default function EmpresasPage() {
   return (
     <PageShell
       title="Empresas"
-      actions={<button type="button" className="ghost-button" onClick={() => load(query, page)}>{loading ? "Atualizando…" : "Atualizar"}</button>}
+      actions={<><a className="ghost-button" href="/api/intelligence/export?type=companies">Exportar CSV</a><button type="button" className="ghost-button" onClick={() => load(query, page)}>{loading ? "Atualizando…" : "Atualizar"}</button></>}
     >
       <section className="section-intro">
         <div>
