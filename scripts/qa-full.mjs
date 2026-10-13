@@ -30,7 +30,7 @@ critical.forEach(exists);
 
 const manifest = JSON.parse(read("extensions/linkedin-capture/manifest.json"));
 assert.equal(manifest.manifest_version, 3);
-assert.equal(manifest.version, "0.9.1");
+assert.equal(manifest.version, "0.9.2");
 assert.ok(manifest.permissions.includes("scripting"));
 assert.ok(manifest.content_scripts.some((x) => x.matches.some((m) => m.includes("linkedin.com/in/"))));
 
@@ -256,9 +256,9 @@ for (const file of scanFiles) {
 }
 
 const extensionReadme = read("extensions/linkedin-capture/README.md");
-assert.ok(extensionReadme.includes("v0.9.1"), "extension README version is stale");
+assert.ok(extensionReadme.includes("v0.9.2"), "extension README version is stale");
 const architecture = read("docs/linkedin-capture-architecture.md");
-assert.ok(architecture.includes("v0.9.1"), "architecture extension version is stale");
+assert.ok(architecture.includes("v0.9.2"), "architecture extension version is stale");
 assert.ok(architecture.includes("API v0.8.1"), "architecture API version is stale");
 
 console.log("Pulse full structural QA: OK");
