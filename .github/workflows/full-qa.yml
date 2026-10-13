@@ -58,6 +58,8 @@ jobs:
         run: node scripts/test-auth.mjs
       - name: Sheets identity regression tests
         run: node scripts/test-sheets-company-match.mjs
+      - name: Pulse quality and intelligence unit tests
+        run: node scripts/test-pulse-quality.mjs
       - name: Postgres integration tests
         run: node scripts/test-db-integration.mjs
       - name: Next.js production build
