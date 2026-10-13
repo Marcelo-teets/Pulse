@@ -8,8 +8,12 @@ export async function GET(request) {
   if (response) return response;
   const db = getPool();
   const { searchParams } = new URL(request.url);
-  const q = (searchParams.get("q") || "").trim();
-  const limit = Math.min(Math.max(Number(searchParams.get("limit") || 50), 1), 200);
+  const q = (searchParams.get("q") || "").trim().slice(0, 200);
+  const rawLimit = Number(searchParams.get("limit") || 50);
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.floor(rawLimit), 1), 200) : 50;
+  const rawPage = Number(searchParams.get("page") || 1);
+  const page = Number.isSafeInteger(rawPage) ? Math.min(Math.max(rawPage, 1), 10000) : 1;
+  const offset = (page - 1) * limit;
   const displayNameSql = `
     COALESCE(
       NULLIF(BTRIM(p.full_name), ''),
@@ -33,8 +37,9 @@ export async function GET(request) {
       conditions.push(`EXISTS (SELECT 1 FROM public.pulse_user_people up WHERE up.person_id = p.id AND up.user_id = $${params.length})`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    params.push(limit);
-    const limitRef = "$" + params.length;
+    params.push(limit, offset);
+    const limitRef = "$" + (params.length - 1);
+    const offsetRef = "$" + params.length;
 
     const [items, total] = await Promise.all([
       db.query(`
@@ -46,7 +51,7 @@ export async function GET(request) {
         LEFT JOIN public.linkedin_companies c ON c.id = r.company_id
         ${where}
         ORDER BY p.last_seen_at DESC
-        LIMIT ${limitRef}
+        LIMIT ${limitRef} OFFSET ${offsetRef}
       `, params),
       db.query(`
         SELECT count(*)::int AS total
@@ -55,10 +60,10 @@ export async function GET(request) {
         LEFT JOIN public.linkedin_current_roles r ON r.person_id = p.id
         LEFT JOIN public.linkedin_companies c ON c.id = r.company_id
         ${where}
-      `, params.slice(0, -1)),
+      `, params.slice(0, -2)),
     ]);
 
-    return Response.json({ connected: true, items: items.rows, total: total.rows[0]?.total || 0 });
+    return Response.json({ connected: true, items: items.rows, total: total.rows[0]?.total || 0, page, limit });
   } catch (error) {
     console.error("People query failed", error);
     return Response.json({ connected: false, items: [], total: 0, message: "Falha ao consultar pessoas." }, { status: 500 });
