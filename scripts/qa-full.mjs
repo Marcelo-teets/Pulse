@@ -181,6 +181,19 @@ assert.ok(configPage.includes("finally"), "pairing UI loading state must always 
 const operationsPage = read("app/operacao/page.js");
 assert.ok(operationsPage.includes("response.status === 403"), "operations page must handle forbidden access");
 
+const peopleApi = read("app/api/people/route.js");
+const companiesApi = read("app/api/companies/route.js");
+for (const [name, code] of [["people", peopleApi], ["companies", companiesApi]]) {
+  assert.ok(code.includes("OFFSET ${offsetRef}"), name + " SQL must support pagination");
+  assert.ok(code.includes("Number.isFinite(rawLimit)"), name + " must reject invalid page-size input");
+  assert.ok(code.includes("Number.isSafeInteger(rawPage)"), name + " must reject invalid page input");
+}
+for (const pageFile of ["app/pessoas/page.js", "app/empresas/page.js"]) {
+  const code = read(pageFile);
+  assert.ok(code.includes("&page="), pageFile + " must load paginated results");
+  assert.ok(code.includes("Página {page} de"), pageFile + " must show page navigation");
+}
+assert.ok(read("app/operacao/page.js").includes("Atualização necessária"), "Old Chrome versions must be visible in operations UI");
 const worker = read("app/api/internal/sheets-sync/route.js");
 for (const marker of [
   "FOR UPDATE SKIP LOCKED",
