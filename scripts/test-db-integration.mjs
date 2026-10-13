@@ -158,13 +158,39 @@ try {
   assert.equal(Number(ops.rows[0].unique_companies), 1);
   assert.equal(Number(ops.rows[0].active_devices), 1);
 
+  // Verify historical employer transitions are preserved, not overwritten.
+  const before = await db.query("SELECT count(*)::int AS n FROM public.pulse_role_history WHERE ended_at IS NULL");
+  assert.equal(before.rows[0].n, 2);
+  const successor = await db.query(
+    "INSERT INTO public.linkedin_companies(company_key,company_name) VALUES ('qa-successor','Empresa Seguinte') RETURNING id"
+  );
+  await db.query(
+    "UPDATE public.linkedin_current_roles SET company_id=$1,current_title='Chief Risk Officer',last_seen_at=NOW() + INTERVAL '1 minute' WHERE person_id=$2",
+    [successor.rows[0].id, cp1.rows[0].id]
+  );
+  const timeline = await db.query(
+    "SELECT company_id,ended_at FROM public.pulse_role_history WHERE person_id=$1 ORDER BY began_at ASC",
+    [cp1.rows[0].id]
+  );
+  assert.equal(timeline.rowCount, 2);
+  assert.ok(timeline.rows[0].ended_at);
+  assert.equal(timeline.rows[1].ended_at, null);
+  await db.query(
+    "UPDATE public.linkedin_current_roles SET last_seen_at=NOW() + INTERVAL '2 minutes' WHERE person_id=$1",
+    [cp1.rows[0].id]
+  );
+  const unchangedCount = await db.query(
+    "SELECT count(*)::int AS n FROM public.pulse_role_history WHERE person_id=$1", [cp1.rows[0].id]
+  );
+  assert.equal(unchangedCount.rows[0].n, 2);
+
   // Schema initialization must remain safe after data already exists.
   const schemaC = await import("../lib/schema.js?instance=c");
   await schemaC.ensureSchema(db);
   const stillThere = await db.query("SELECT count(*)::int AS n FROM public.linkedin_people");
   assert.equal(stillThere.rows[0].n, 2);
   const schemaVersion = await db.query("SELECT version FROM public.pulse_schema_meta WHERE key='runtime'");
-  assert.equal(schemaVersion.rows[0].version, 6);
+  assert.equal(schemaVersion.rows[0].version, 7);
   const companyIdentityColumns = await db.query(
     "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND column_name='linkedin_url' AND table_name IN ('linkedin_company_captures','linkedin_companies') ORDER BY table_name"
   );

@@ -39,7 +39,7 @@ export async function GET(request) {
       cols = [["company_name","Empresa"],["linkedin_url","LinkedIn"],["description","Descrição"],["website","Site"],["employee_count","Funcionários"],["signal_score","Score de sinais"],["signal_label","Classificação"],["last_seen_at","Última captura"]];
     }
     const result = await db.query(sql + (filters.length ? " WHERE " + filters.join(" AND ") : "") +
-      " ORDER BY last_seen_at DESC LIMIT 5000", params);
+      " ORDER BY " + (type === "people" ? "p.last_seen_at" : "c.last_seen_at") + " DESC LIMIT 5000", params);
     const rows = type === "companies"
       ? result.rows.map((row) => { const signals = companySignals(row); return { ...row, signal_score: signals.score, signal_label: signals.label }; })
       : result.rows;

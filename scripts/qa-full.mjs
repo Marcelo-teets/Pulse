@@ -125,7 +125,7 @@ assert.ok(dropDevice >= 0 && createDevice > dropDevice, "device view recreation 
 assert.ok(dropAudit >= 0 && createAudit > dropAudit, "audit view recreation is not idempotent");
 assert.ok(schema.includes("pg_advisory_xact_lock"), "schema initialization is not serialized across serverless instances");
 assert.ok(schema.includes("ROLLBACK"), "schema initialization rollback guard missing");
-assert.ok(schema.includes("SCHEMA_VERSION = 6"), "runtime schema version missing");
+assert.ok(schema.includes("SCHEMA_VERSION = 7"), "runtime schema version missing");
 assert.ok(schema.includes("pulse_schema_meta"), "runtime schema metadata table missing");
 assert.ok(schema.includes("Number(current.rows[0]?.version || 0) < SCHEMA_VERSION"), "runtime schema version gate missing");
 assert.ok(schema.includes("ux_linkedin_companies_linkedin_url"), "stable company LinkedIn URL unique index missing");
