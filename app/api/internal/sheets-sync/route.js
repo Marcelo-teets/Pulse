@@ -175,7 +175,7 @@ async function markError(database, ids, error) {
     UPDATE public.linkedin_sheet_sync_queue
     SET status='error',
         last_error=$2,
-        next_attempt_at=NOW() + (LEAST(GREATEST(attempts,1),8) * INTERVAL '15 minutes')
+        next_attempt_at=NOW() + (POWER(2, LEAST(GREATEST(attempts,1),8)-1) * INTERVAL '15 minutes')
     WHERE id = ANY($1::bigint[])
   `, [ids, message]);
 }
