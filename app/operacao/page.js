@@ -29,6 +29,17 @@ function Metric({ label, value, hint, accent }) {
   );
 }
 
+const SHEETS_LABELS = {
+  ready: "API acessível, abas conferidas",
+  api_disabled: "Google Sheets API desabilitada",
+  not_configured: "Credenciais/planilha não configuradas",
+  permission_denied: "Conta de serviço sem acesso à planilha",
+  sheet_not_found: "Planilha não encontrada ou inacessível",
+  missing_tabs: "Planilha com abas obrigatórias ausentes",
+  auth_failed: "Falha na autenticação da conta de serviço",
+  rate_limited: "Google Sheets limitou temporariamente as consultas",
+  unreachable: "Google Sheets indisponível ou sem resposta",
+};
 const MIN_EXTENSION_VERSION = "0.8.9";
 function extensionOutdated(value) {
   const parts = String(value || "").split(".").map(Number);
@@ -136,6 +147,9 @@ export default function OperationsPage() {
 
       <article className="panel" style={{ padding: 20, marginBottom: 16 }}>
         <div className="panel-header"><div><p className="eyebrow">AUTOMAÇÃO</p><h3>Monitoramento e reprocessamento</h3></div></div>
+        <p role="status"><strong>Conexão Google Sheets:</strong> {SHEETS_LABELS[health.sheets?.state] || "Ainda não verificada"}. {health.sheets?.checked_at ? "Última verificação: " + fmt(health.sheets.checked_at) : ""}</p>
+        {health.sheets?.state === "api_disabled" && <p role="alert" className="form-error">Habilite a Google Sheets API no projeto Google Cloud associado à conta de serviço. <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noreferrer">Abrir biblioteca de APIs do Google Cloud ↗</a>. Uma fila vazia não comprova a integração.</p>}
+        {health.sheets?.state === "missing_tabs" && <p role="alert">Abas faltantes: {(health.sheets.missing_tabs || []).join(", ")}.</p>}
         <p>Falhas na fila: {health.metrics?.errors ?? "—"} · Em processamento travado: {health.metrics?.stalled ?? "—"} · Dispositivos ainda não verificados na v0.9.2: {health.metrics?.unverified_devices ?? "—"}</p>
         {(health.warnings || []).map((warning) => <p role="alert" key={warning}>{warning}</p>)}
         <button type="button" className="ghost-button" onClick={retrySheets}>Reenfileirar erros do Sheets</button>
