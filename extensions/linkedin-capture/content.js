@@ -361,7 +361,15 @@
     const full_name = profileName(top);
     const location = profileLocation(top);
     const headline = profileHeadline(top, full_name, location);
-    const role = topCardCompany(top, headline) || currentRole(headline);
+    const headerRole = topCardCompany(top, headline);
+    const experienceRole = currentRole(headline);
+    // A dated "Present" Experience entry with a canonical company link is
+    // stronger evidence than an ambiguous header chip (which may be a school).
+    const conflict = headerRole?.current_company && experienceRole?.current_company &&
+      companyKey(headerRole.current_company) !== companyKey(experienceRole.current_company);
+    const role = conflict && experienceRole.company_url
+      ? { ...experienceRole, current_title: headline }
+      : (headerRole || experienceRole);
     if (!full_name) throw new Error("Não encontrei o nome no cabeçalho do perfil. Aguarde a página carregar.");
     if (!headline) throw new Error("Não encontrei o cargo/headline no cabeçalho do perfil. Aguarde a página carregar.");
     if (!role.current_company) throw new Error("Não encontrei a empresa atual no perfil.");
