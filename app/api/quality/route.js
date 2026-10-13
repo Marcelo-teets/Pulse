@@ -1,6 +1,7 @@
 import { getPool } from "../../../lib/db";
 import { requireUser } from "../../../lib/auth";
 import { computeQuality,evidenceFlags,REVIEW_FIELDS } from "../../../lib/quality-core.js";
+import { canonicalPersonUrl } from "../../../lib/linkedin-identity.js";
 export const dynamic="force-dynamic";
 export async function GET() {
  const {user,response}=await requireUser(); if(response)return response;
@@ -9,11 +10,17 @@ export async function GET() {
  try {
   const [captures,reviews]=await Promise.all([
    db.query("SELECT p.id::text AS capture_id,p.full_name,p.linkedin_url,p.location,p.current_title,p.current_company,p.captured_at,c.company_name,c.linkedin_url AS company_linkedin_url,c.description,c.website,c.employee_count FROM public.linkedin_profile_captures p LEFT JOIN public.linkedin_company_captures c ON c.person_capture_id=p.id ORDER BY p.captured_at DESC LIMIT 50"),
-   db.query("WITH candidates AS (SELECT p.id,p.linkedin_url,MAX(r.reviewed_at) AS latest_review FROM public.linkedin_profile_captures p JOIN public.pulse_capture_reviews r ON r.capture_id=p.id GROUP BY p.id,p.linkedin_url), chosen AS (SELECT DISTINCT ON (linkedin_url) id,linkedin_url,latest_review FROM candidates ORDER BY linkedin_url,latest_review DESC), sample AS (SELECT id FROM chosen ORDER BY latest_review DESC LIMIT 50) SELECT r.capture_id::text,r.field_key,r.verdict,r.expected_value,r.reviewed_at,p.linkedin_url AS profile_key FROM public.pulse_capture_reviews r JOIN sample s ON s.id=r.capture_id JOIN public.linkedin_profile_captures p ON p.id=r.capture_id")
+   db.query("SELECT r.capture_id::text,r.field_key,r.verdict,r.expected_value,r.reviewed_at,p.linkedin_url AS profile_key FROM public.pulse_capture_reviews r JOIN public.linkedin_profile_captures p ON p.id=r.capture_id ORDER BY r.reviewed_at DESC LIMIT 5000")
   ]);
+  const reviewedIdentities=new Set();
+  const metricRows=reviews.rows.filter(r=>{
+   const identity=canonicalPersonUrl(r.profile_key)||String(r.profile_key||r.capture_id);
+   if(!reviewedIdentities.has(identity)&&reviewedIdentities.size>=50)return false;
+   reviewedIdentities.add(identity);return true;
+  });
   const items=captures.rows.map(p=>({ ...p, evidence:evidenceFlags(p,{company_name:p.company_name,linkedin_url:p.company_linkedin_url,description:p.description,website:p.website,employee_count:p.employee_count}),
-   reviews:Object.fromEntries(reviews.rows.filter(r=>r.capture_id===p.capture_id).map(r=>[r.field_key,{verdict:r.verdict,expected_value:r.expected_value}])) }));
-  return Response.json({connected:true,items,stats:computeQuality(reviews.rows),fields:REVIEW_FIELDS});
+   reviews:Object.fromEntries(metricRows.filter(r=>r.capture_id===p.capture_id).map(r=>[r.field_key,{verdict:r.verdict,expected_value:r.expected_value}])) }));
+  return Response.json({connected:true,items,stats:computeQuality(metricRows),fields:REVIEW_FIELDS});
  }catch(error){console.error("Quality read failed",error);return Response.json({error:"Erro de consulta da qualidade."},{status:500});}
 }
 export async function POST(request){
