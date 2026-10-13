@@ -2,7 +2,8 @@
 const LINKEDIN_API_VERSION = "0.8.1";
 import { createSign } from "node:crypto";
 import pg from "pg";
-import { findCompanySheetRow } from "../../../../lib/sheets-company-match.js";
+import { findCompanySheetRow, indexPeopleSheetRows, appendedSheetRow } from "../../../../lib/sheets-company-match.js";
+import { canonicalPersonUrl } from "../../../../lib/linkedin-identity.js";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -233,12 +234,8 @@ export async function GET(request) {
     const companyRows = companiesSheet.values || [];
     const existingCaptureIds = new Set((capturesSheet.values || []).map((row) => String(row?.[0] || "").trim()).filter(Boolean));
 
-    const personRowByUrl = new Map();
-    peopleRows.forEach((row, index) => {
-      const url = String(row?.[2] || "").trim().replace(/\/$/, "");
-      if (url) personRowByUrl.set(url, index + 2);
-    });
-    let nextPersonRow = peopleRows.length + 2;
+    // Reject homonymous profile identities before any Google Sheets write.
+    const personRowByUrl = indexPeopleSheetRows(peopleRows);
 
     // Match against the complete current sheet, including rows appended in this batch.
     // Canonical LinkedIn URL wins; duplicate company names are never enough.
@@ -246,7 +243,8 @@ export async function GET(request) {
     const syncedIds = [];
 
     for (const item of payloads) {
-      const personUrl = String(item.linkedin_url || "").replace(/\/$/, "");
+      const personUrl = canonicalPersonUrl(item.linkedin_url);
+      if (!personUrl) throw new Error("LinkedIn inválido no payload da pessoa.");
 
       if (!existingCaptureIds.has(String(item.sync_id))) {
         captureRows.push([
@@ -284,8 +282,8 @@ export async function GET(request) {
       if (existingPersonRow) {
         await updateValues(token, `Pessoas!A${existingPersonRow}:H${existingPersonRow}`, personValues);
       } else {
-        await appendValues(token, "Pessoas!A:H", personValues);
-        personRowByUrl.set(personUrl, nextPersonRow++);
+        const appended = await appendValues(token, "Pessoas!A:H", personValues);
+        personRowByUrl.set(personUrl, appendedSheetRow(appended, "Pessoas"));
       }
 
       const companyValues = [[
@@ -303,8 +301,8 @@ export async function GET(request) {
         await updateValues(token, `Empresas!A${existingCompanyRow}:H${existingCompanyRow}`, companyValues);
         companyRows[existingCompanyRow - 2] = companyValues[0];
       } else {
-        await appendValues(token, "Empresas!A:H", companyValues);
-        companyRows.push(companyValues[0]);
+        const appended = await appendValues(token, "Empresas!A:H", companyValues);
+        companyRows[appendedSheetRow(appended, "Empresas") - 2] = companyValues[0];
       }
 
       syncedIds.push(item.sync_id);
