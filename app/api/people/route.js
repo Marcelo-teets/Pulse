@@ -32,6 +32,12 @@ export async function GET(request) {
       params.push("%" + q + "%");
       conditions.push(`(${displayNameSql} ILIKE $1 OR p.current_title ILIKE $1 OR p.current_company ILIKE $1 OR p.location ILIKE $1 OR c.company_name ILIKE $1)`);
     }
+    const role = (searchParams.get("role") || "").trim().slice(0, 100);
+    const location = (searchParams.get("location") || "").trim().slice(0, 100);
+    const company = (searchParams.get("company") || "").trim().slice(0, 100);
+    if (role) { params.push("%" + role + "%"); conditions.push("p.current_title ILIKE $" + params.length); }
+    if (location) { params.push("%" + location + "%"); conditions.push("p.location ILIKE $" + params.length); }
+    if (company) { params.push("%" + company + "%"); conditions.push("c.company_name ILIKE $" + params.length); }
     if (user.role !== "master") {
       params.push(user.id);
       conditions.push(`EXISTS (SELECT 1 FROM public.pulse_user_people up WHERE up.person_id = p.id AND up.user_id = $${params.length})`);

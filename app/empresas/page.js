@@ -62,6 +62,8 @@ export default function EmpresasPage() {
         </div>
       </section>
 
+      <div style={{ marginBottom: 16 }}><a className="ghost-button" href={"/api/export?type=companies&q=" + encodeURIComponent(query)}>Exportar empresas em CSV ↗</a></div>
+
       <article className="panel">
         <div className="panel-header people-toolbar">
           <div>
@@ -82,7 +84,7 @@ export default function EmpresasPage() {
                 <th>Headcount</th>
                 <th>Pessoas</th>
                 <th>Website</th>
-                <th>Última captura</th>
+                <th>Sinais DCM</th><th>Última captura</th>
               </tr>
             </thead>
             <tbody>
@@ -102,11 +104,12 @@ export default function EmpresasPage() {
                   <td>
                     {company.website ? <a className="table-link" href={company.website} target="_blank" rel="noreferrer">{company.website} ↗</a> : "—"}
                   </td>
+                  <td><b>{company.signals?.score ?? 0}/100</b><small>{company.signals?.label || "Sem classificação"}</small><small>{(company.signals?.signals || []).join(" · ") || "Sem sinais textuais"}</small></td>
                   <td>{formatDate(company.last_seen_at)}</td>
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="5">
+                  <td colSpan="6">
                     <div className="empty-state">
                       <div className="empty-icon">▦</div>
                       <b>{loading ? "Carregando…" : "Nenhuma empresa encontrada"}</b>

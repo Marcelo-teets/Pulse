@@ -1,5 +1,6 @@
 import { getPool } from "../../../lib/db";
 import { requireUser } from "../../../lib/auth";
+import { companySignals } from "../../../lib/pulse-intelligence.js";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export async function GET(request) {
       `, params.slice(0, -2)),
     ]);
 
-    return Response.json({ connected: true, items: items.rows, total: total.rows[0]?.total || 0, page, limit });
+    return Response.json({ connected: true, items: items.rows.map((item) => ({ ...item, signals: companySignals(item) })), total: total.rows[0]?.total || 0, page, limit });
   } catch (error) {
     console.error("Companies query failed", error);
     return Response.json({ connected: false, items: [], total: 0, message: "Falha ao consultar empresas." }, { status: 500 });
