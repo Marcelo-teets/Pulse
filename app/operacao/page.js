@@ -56,6 +56,8 @@ export default function OperationsPage() {
     quality: {},
   });
   const [loading, setLoading] = useState(true);
+  const [health, setHealth] = useState({ warnings: [], metrics: {} });
+  const [retryNotice, setRetryNotice] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,6 +72,8 @@ export default function OperationsPage() {
         return;
       }
       setData(await response.json());
+      const healthResponse = await fetch("/api/operations/health", { cache: "no-store" });
+      if (healthResponse.ok) setHealth(await healthResponse.json());
     } catch {
       setData({
         connected: false,
@@ -90,6 +94,16 @@ export default function OperationsPage() {
     return () => clearInterval(timer);
   }, [load]);
 
+  async function retrySheets() {
+    setRetryNotice("Solicitando reprocessamento...");
+    try {
+      const response = await fetch("/api/operations/retry", { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Não foi possível reenfileirar.");
+      setRetryNotice(result.queued + " registro(s) reenfileirados para o cron.");
+      await load();
+    } catch (error) { setRetryNotice(error.message); }
+  }
   const s = data.summary || {};
   const outdatedDevices = (data.devices || []).filter((device) => device.status === "active" && extensionOutdated(device.extension_version));
 
@@ -120,6 +134,14 @@ export default function OperationsPage() {
         </p>
       )}
 
+      <article className="panel" style={{ padding: 20, marginBottom: 16 }}>
+        <div className="panel-header"><div><p className="eyebrow">AUTOMAÇÃO</p><h3>Monitoramento e reprocessamento</h3></div></div>
+        <p>Falhas na fila: {health.metrics?.errors ?? "—"} · Em processamento travado: {health.metrics?.stalled ?? "—"} · Dispositivos ainda não verificados na v0.9.2: {health.metrics?.unverified_devices ?? "—"}</p>
+        {(health.warnings || []).map((warning) => <p role="alert" key={warning}>{warning}</p>)}
+        <button type="button" className="ghost-button" onClick={retrySheets}>Reenfileirar erros do Sheets</button>
+        {retryNotice && <p role="status">{retryNotice}</p>}
+        <p><small>O cron do plano Hobby realiza a sincronização às 09:00 UTC; este botão não executa sincronização imediata.</small></p>
+      </article>
       <section className="metrics-grid">
         <Metric label="Dispositivos ativos" value={s.active_devices} hint="credenciais válidas" accent />
         <Metric label="Backlog Sheets" value={s.sync_backlog} hint="pending + processing + error" />
