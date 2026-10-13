@@ -17,6 +17,7 @@ try {
   await apply("migrations/003_multi_user_auth.sql");
   await apply("migrations/004_company_linkedin_identity.sql");
   await apply("migrations/005_login_rate_limit.sql");
+  await apply("migrations/006_pulse_intelligence.sql");
 
   // Simulate separate serverless cold starts initializing the same schema concurrently.
   const schemaA = await import("../lib/schema.js?instance=a");
@@ -27,7 +28,7 @@ try {
     "linkedin_profile_captures","linkedin_company_captures","linkedin_sheet_sync_queue",
     "linkedin_people","linkedin_companies","linkedin_current_roles","linkedin_devices",
     "linkedin_pairing_codes","linkedin_api_audit","pulse_users","pulse_sessions",
-    "pulse_user_people","pulse_user_companies","pulse_schema_meta","pulse_login_attempts"
+    "pulse_user_people","pulse_user_companies","pulse_schema_meta","pulse_login_attempts","pulse_quality_reviews","pulse_role_history"
   ];
   const tables = await db.query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"

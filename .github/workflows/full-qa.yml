@@ -54,6 +54,8 @@ jobs:
           node --check extensions/linkedin-capture/popup.js
       - name: LinkedIn extractor regressions
         run: node scripts/test-linkedin-extractor.mjs
+      - name: Pulse quality and prospecting regression tests
+        run: node scripts/test-pulse-intelligence.mjs
       - name: Authentication unit tests
         run: node scripts/test-auth.mjs
       - name: Sheets identity regression tests
