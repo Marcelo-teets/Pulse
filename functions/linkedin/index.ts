@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { attachDatabasePool } from "@neon/functions";
+import { canonicalPersonUrl, canonicalCompanyUrl } from "../../lib/linkedin-identity.js";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
 attachDatabasePool(pool);
@@ -169,34 +170,11 @@ async function authenticate(request: Request) {
 }
 
 function normalizeLinkedinUrl(value: unknown) {
-  const raw = clean(value, 2000);
-  if (!raw) return null;
-  try {
-    const u = new URL(raw);
-    if (!/(^|\.)linkedin\.com$/i.test(u.hostname) || !/^\/in\/[^/?#]+\/?$/i.test(u.pathname)) return null;
-    u.search = "";
-    u.hash = "";
-    return u.toString().replace(/\/$/, "");
-  } catch {
-    return null;
-  }
+  return canonicalPersonUrl(clean(value, 2000));
 }
 
 function normalizeLinkedinCompanyUrl(value: unknown) {
-  const raw = clean(value, 2000);
-  if (!raw) return null;
-  try {
-    const u = new URL(raw);
-    if (!/(^|\.)linkedin\.com$/i.test(u.hostname)) return null;
-    const m = u.pathname.match(/^\/company\/[^/?#]+/i);
-    if (!m) return null;
-    u.pathname = m[0];
-    u.search = "";
-    u.hash = "";
-    return u.toString().replace(/\/$/, "");
-  } catch {
-    return null;
-  }
+  return canonicalCompanyUrl(clean(value, 2000));
 }
 
 function capturedAt(value: unknown) {
