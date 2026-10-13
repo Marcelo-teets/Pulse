@@ -21,6 +21,8 @@ const critical = [
   "vercel.json",
   "scripts/build-neon-linkedin-function.mjs",
   "scripts/test-linkedin-api-bundle.mjs",
+  "scripts/test-sheets-company-match.mjs",
+  "lib/sheets-company-match.js",
   "migrations/004_company_linkedin_identity.sql",
   "migrations/005_login_rate_limit.sql"
 ];
@@ -28,7 +30,7 @@ critical.forEach(exists);
 
 const manifest = JSON.parse(read("extensions/linkedin-capture/manifest.json"));
 assert.equal(manifest.manifest_version, 3);
-assert.equal(manifest.version, "0.9.1");
+assert.equal(manifest.version, "0.9.2");
 assert.ok(manifest.permissions.includes("scripting"));
 assert.ok(manifest.content_scripts.some((x) => x.matches.some((m) => m.includes("linkedin.com/in/"))));
 
@@ -179,6 +181,19 @@ assert.ok(configPage.includes("finally"), "pairing UI loading state must always 
 const operationsPage = read("app/operacao/page.js");
 assert.ok(operationsPage.includes("response.status === 403"), "operations page must handle forbidden access");
 
+const peopleApi = read("app/api/people/route.js");
+const companiesApi = read("app/api/companies/route.js");
+for (const [name, code] of [["people", peopleApi], ["companies", companiesApi]]) {
+  assert.ok(code.includes("OFFSET ${offsetRef}"), name + " SQL must support pagination");
+  assert.ok(code.includes("Number.isFinite(rawLimit)"), name + " must reject invalid page-size input");
+  assert.ok(code.includes("Number.isSafeInteger(rawPage)"), name + " must reject invalid page input");
+}
+for (const pageFile of ["app/pessoas/page.js", "app/empresas/page.js"]) {
+  const code = read(pageFile);
+  assert.ok(code.includes("&page="), pageFile + " must load paginated results");
+  assert.ok(code.includes("Página {page} de"), pageFile + " must show page navigation");
+}
+assert.ok(read("app/operacao/page.js").includes("Atualização necessária"), "Old Chrome versions must be visible in operations UI");
 const worker = read("app/api/internal/sheets-sync/route.js");
 for (const marker of [
   "FOR UPDATE SKIP LOCKED",
@@ -194,10 +209,14 @@ for (const marker of [
   'getValues(token, "Capturas!A2:A")',
   "existingCaptureIds",
   "company_linkedin_url",
-  "companyRowByName",
+  "findCompanySheetRow",
   'const LINKEDIN_API_VERSION = "0.8.1"',
   "metricsUpdated: true"
 ]) assert.ok(worker.includes(marker), `missing Sheets worker invariant: ${marker}`);
+assert.ok(!worker.includes("companyRowByName"), "Unsafe name-only Sheets matching must be retired");
+const sheetMatch = read("lib/sheets-company-match.js");
+assert.ok(sheetMatch.includes("companyLinkedinKey"), "Canonical company matcher missing");
+assert.ok(sheetMatch.includes("legacy.length !== 1"), "Ambiguous legacy company matcher must be fail-closed");
 assert.ok(worker.includes("fetchWithTimeout"), "Google API calls must be bounded by timeouts");
 assert.ok(worker.includes("AbortSignal.timeout"), "Google API timeout signal missing");
 const emptyQueuePos = worker.indexOf("if (!ids.length)");
@@ -254,9 +273,9 @@ for (const file of scanFiles) {
 }
 
 const extensionReadme = read("extensions/linkedin-capture/README.md");
-assert.ok(extensionReadme.includes("v0.9.1"), "extension README version is stale");
+assert.ok(extensionReadme.includes("v0.9.2"), "extension README version is stale");
 const architecture = read("docs/linkedin-capture-architecture.md");
-assert.ok(architecture.includes("v0.9.1"), "architecture extension version is stale");
+assert.ok(architecture.includes("v0.9.2"), "architecture extension version is stale");
 assert.ok(architecture.includes("API v0.8.1"), "architecture API version is stale");
 
 console.log("Pulse full structural QA: OK");

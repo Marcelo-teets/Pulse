@@ -40,7 +40,7 @@ function tagged(tag, text, children = [], attrs = {}, classes = []) {
   if (tag === "section") for (const child of children) child.section = n;
   return n;
 }
-function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, school = "", includeExperience = false, messageType = "EXTRACT_PROFILE", expectedCompany = "", attemptIndex = 0 }) {
+function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, companyHref = "", school = "", schoolFirst = false, includeExperience = false, messageType = "EXTRACT_PROFILE", expectedCompany = "", attemptIndex = 0 }) {
   const nameNode = tagged("div", name, [], {}, modern ? [] : ["text-heading-xlarge"]);
   const header = tagged("section", "", [
     tagged("h1", "Foto do perfil"),
@@ -48,10 +48,11 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
     tagged("div", title, [], {}, modern ? [] : ["text-body-medium"]),
     tagged("span", place, [], {}, modern ? [] : ["text-body-small"]),
     ...includeContact ? [tagged("span", "Dados de contato")] : [],
+    ...(school && schoolFirst ? [tagged("button", school, [], {role:"button"})] : []),
     ...omitCompany ? [] : [companyAsButton
       ? tagged("button", company, [], {role:"button"})
-      : tagged("a", `Ver empresa: ${company}`, [], {href:`https://www.linkedin.com/company/${slug}/`})],
-    ...school ? [tagged("button", school, [], {role:"button"})] : []
+      : tagged("a", `Ver empresa: ${company}`, [], {href:companyHref || `https://www.linkedin.com/company/${slug}/`})],
+    ...(school && !schoolFirst ? [tagged("button", school, [], {role:"button"})] : [])
   ]);
   header.innerText = `${name}\n${title}\n${place}\n${includeContact ? "Dados de contato\n" : ""}${omitCompany ? "" : company}`;
   const activity = tagged("section", "Atividades", [tagged("a", unrelated, [], {href:"https://www.linkedin.com/company/unrelated/"})]);
@@ -189,11 +190,21 @@ assert.equal(missingCompanyEvidence.ok, false);
 const weakSingleSignal = capture({name:"Daniela Batista dos Santos",title:"CFO",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,includeContact:false,pageTitle:"LinkedIn"});
 assert.equal(weakSingleSignal.ok, false);
 
+const externalCompany = capture({name:"Daniela Batista dos Santos",title:"CFO",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,companyHref:"https://untrusted.example/company/pagaleve"});
+assert.equal(externalCompany.ok, true);
+assert.equal(externalCompany.profile.current_company, "Pagaleve");
+assert.equal(externalCompany.profile._company_url, "");
+
 const danielHrefLess = capture({name:"Daniel Brandão",title:"Founder | CEO | Banker | Board Member | CFO | Cyclist",place:"Brasil",company:"VitalCura",slug:"vitalcura",unrelated:"Outra empresa",modern:true,companyAsButton:true,school:"Universidade de São Paulo",includeExperience:true});
 assert.equal(danielHrefLess.ok, true);
 assert.equal(danielHrefLess.profile.full_name, "Daniel Brandão");
 assert.equal(danielHrefLess.profile.current_company, "VitalCura");
 assert.equal(danielHrefLess.profile._company_url, "");
+
+const schoolFirst = capture({name:"Daniel Brandão",title:"Founder | CEO | Banker | Board Member | CFO | Cyclist",place:"Brasil",company:"VitalCura",slug:"vitalcura",unrelated:"Outra empresa",modern:true,companyAsButton:true,school:"Universidade de São Paulo",schoolFirst:true,includeExperience:true});
+assert.equal(schoolFirst.ok, true);
+assert.equal(schoolFirst.profile.current_company, "VitalCura");
+assert.equal(schoolFirst.profile._company_url, "https://www.linkedin.com/company/vitalcura");
 
 const danielResolved = capture({name:"Daniel Brandão",title:"Founder | CEO | Banker | Board Member | CFO | Cyclist",place:"Brasil",company:"VitalCura",slug:"vitalcura",unrelated:"Outra empresa",modern:true,companyAsButton:true,school:"Universidade de São Paulo",includeExperience:true,messageType:"RESOLVE_COMPANY_LINK",expectedCompany:"VitalCura"});
 assert.equal(danielResolved.ok, true);
