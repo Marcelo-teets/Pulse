@@ -64,7 +64,7 @@ try {
   const pair = await handler.fetch(new Request("https://qa.example/pair", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ pairing_code: pairingCode, device_name: "QA", extension_version: "0.9.1" }),
+    body: JSON.stringify({ pairing_code: pairingCode, device_name: "QA", extension_version: "0.9.2" }),
   }));
   assert.equal(pair.status, 201);
   const pairBody = await pair.json();
@@ -72,7 +72,7 @@ try {
 
   const authHeaders = {
     "x-pulse-device-token": pairBody.device_token,
-    "x-pulse-extension-version": "0.9.1",
+    "x-pulse-extension-version": "0.9.2",
   };
 
   const status = await handler.fetch(new Request("https://qa.example/status", { headers: authHeaders }));
@@ -117,7 +117,7 @@ try {
       employee_count: "11-50",
       captured_at: new Date().toISOString(),
     },
-    meta: { extension_version: "0.9.1", quality_score: 100, missing_fields: [] },
+    meta: { extension_version: "0.9.2", quality_score: 100, missing_fields: [] },
   };
 
   const capture = await handler.fetch(new Request("https://qa.example/capture", {
