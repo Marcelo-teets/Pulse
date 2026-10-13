@@ -28,7 +28,10 @@ const critical = [
   "migrations/006_quality_intelligence.sql",
   "lib/quality-core.js",
   "lib/dcm-fit.js",
-  "lib/csv-safe.js"
+  "lib/csv-safe.js",
+  "lib/linkedin-identity.js",
+  "lib/sheets-health.js",
+  "scripts/test-sheets-health.mjs"
 ];
 critical.push("app/api/quality/route.js","app/api/intelligence/route.js","app/api/intelligence/export/route.js","app/api/operations/retry/route.js","app/api/operations/health/route.js","app/qualidade/page.js","app/inteligencia/page.js","scripts/test-pulse-quality.mjs");
 critical.forEach(exists);
@@ -199,6 +202,9 @@ for (const pageFile of ["app/pessoas/page.js", "app/empresas/page.js"]) {
   assert.ok(code.includes("Página {page} de"), pageFile + " must show page navigation");
 }
 assert.ok(read("app/operacao/page.js").includes("Atualização necessária"), "Old Chrome versions must be visible in operations UI");
+const healthRoute = read("app/api/operations/health/route.js");
+assert.ok(healthRoute.includes("inspectSheetsConnection"), "Operations endpoint must query real Sheets connectivity rather than infer from empty queue");
+assert.ok(read("app/operacao/page.js").includes("Google Sheets API desabilitada"), "Operations UI must explain disabled Sheets API");
 const worker = read("app/api/internal/sheets-sync/route.js");
 for (const marker of [
   "FOR UPDATE SKIP LOCKED",
