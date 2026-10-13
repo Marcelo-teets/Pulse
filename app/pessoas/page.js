@@ -63,7 +63,7 @@ export default function PessoasPage() {
   return (
     <PageShell
       title="Pessoas"
-      actions={<button type="button" className="ghost-button" onClick={() => load(query, page)}>{loading ? "Atualizando…" : "Atualizar"}</button>}
+      actions={<><a className="ghost-button" href="/api/intelligence/export?type=people">Exportar CSV</a><button type="button" className="ghost-button" onClick={() => load(query, page)}>{loading ? "Atualizando…" : "Atualizar"}</button></>}
     >
       <section className="section-intro">
         <div>
@@ -98,6 +98,7 @@ export default function PessoasPage() {
                 <th>Empresa</th>
                 <th>Localização</th>
                 <th>Última captura</th>
+                <th>Histórico</th>
               </tr>
             </thead>
             <tbody>
@@ -119,10 +120,11 @@ export default function PessoasPage() {
                   </td>
                   <td>{person.location || "—"}</td>
                   <td>{formatDate(person.last_seen_at)}</td>
+                  <td><a className="table-link" href={"/inteligencia/historico?person_id="+encodeURIComponent(person.id)}>Ver mudanças</a></td>
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="5">
+                  <td colSpan="6">
                     <div className="empty-state">
                       <div className="empty-icon">◎</div>
                       <b>{loading ? "Carregando…" : "Nenhuma pessoa encontrada"}</b>
