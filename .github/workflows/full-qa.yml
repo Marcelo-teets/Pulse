@@ -75,5 +75,5 @@ jobs:
         run: node scripts/build-linkedin-extension.mjs
       - uses: actions/upload-artifact@v4
         with:
-          name: pulse-full-qa-extension-v0.9.1
+          name: pulse-full-qa-extension-v0.9.2
           path: dist/linkedin-capture/**
