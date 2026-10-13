@@ -8,6 +8,8 @@ const cases = Array.from({length:40},(_,i)=>({id:i+1,name:"Pessoa "+(i+1),title:
 const reviews = cases.flatMap(c=>["full_name","current_title","current_company","company_linkedin_url"].map(field=>({capture_id:c.id,field_key:field,verdict:"correct"})));
 assert.equal(computeQuality(reviews).homologated,true);
 assert.equal(computeQuality(reviews).profiles_reviewed,40);
+const duplicates=[...reviews,{capture_id:500,profile_key:"https://www.linkedin.com/in/ana",field_key:"full_name",verdict:"correct"},{capture_id:501,profile_key:"https://www.linkedin.com/in/ana",field_key:"current_title",verdict:"correct"}];
+assert.equal(computeQuality(duplicates).profiles_reviewed,41,"only one repeated profile counted");
 const oneError=reviews.map((r,i)=>i===0?{...r,verdict:"incorrect"}:r);
 assert.equal(computeQuality(oneError).fields.full_name.precision,97.5);
 assert.equal(computeQuality(oneError).homologated,false);
