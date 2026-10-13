@@ -196,10 +196,14 @@ for (const marker of [
   'getValues(token, "Capturas!A2:A")',
   "existingCaptureIds",
   "company_linkedin_url",
-  "companyRowByName",
+  "findCompanySheetRow",
   'const LINKEDIN_API_VERSION = "0.8.1"',
   "metricsUpdated: true"
 ]) assert.ok(worker.includes(marker), `missing Sheets worker invariant: ${marker}`);
+assert.ok(!worker.includes("companyRowByName"), "Unsafe name-only Sheets matching must be retired");
+const sheetMatch = read("lib/sheets-company-match.js");
+assert.ok(sheetMatch.includes("companyLinkedinKey"), "Canonical company matcher missing");
+assert.ok(sheetMatch.includes("legacy.length !== 1"), "Ambiguous legacy company matcher must be fail-closed");
 assert.ok(worker.includes("fetchWithTimeout"), "Google API calls must be bounded by timeouts");
 assert.ok(worker.includes("AbortSignal.timeout"), "Google API timeout signal missing");
 const emptyQueuePos = worker.indexOf("if (!ids.length)");
