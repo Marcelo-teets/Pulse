@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { computeQuality, evidenceFlags, REVIEW_FIELDS } from "../lib/quality-core.js";
 import { scoreCompany } from "../lib/dcm-fit.js";
 import { csvCell,csvDocument } from "../lib/csv-safe.js";
+import { canonicalPersonUrl, canonicalCompanyUrl } from "../lib/linkedin-identity.js";
+import { companyLinkedinKey } from "../lib/sheets-company-match.js";
 assert.equal(computeQuality([]).homologated,false);
 assert.equal(computeQuality([]).fields.full_name.precision,null);
 const cases = Array.from({length:40},(_,i)=>({id:i+1,name:"Pessoa "+(i+1),title:i%2?"CFO":"CEO",company:"Empresa "+(i+1),location:i%2?"Brasil":"São Paulo",language:i%2?"EN":"PT"}));
@@ -16,6 +18,19 @@ assert.equal(computeQuality(oneError).homologated,false);
 assert.equal(computeQuality(reviews.filter(r=>r.field_key!=="current_company")).homologated,false);
 assert.equal(computeQuality(reviews,29).homologated,false);
 assert.equal(computeQuality(reviews,51).homologated,false);
+assert.equal(canonicalPersonUrl("https://br.linkedin.com/in/ANA-Silva/?trk=feed"),"https://www.linkedin.com/in/ana-silva");
+assert.equal(canonicalPersonUrl("https://www.linkedin.com/in/ana-silva/"),"https://www.linkedin.com/in/ana-silva");
+assert.equal(canonicalCompanyUrl("https://br.linkedin.com/company/Pagaleve/about/?trk=foo"),"https://www.linkedin.com/company/pagaleve");
+assert.equal(companyLinkedinKey("https://br.linkedin.com/company/Pagaleve/about/"),companyLinkedinKey("https://www.linkedin.com/company/pagaleve/"));
+for (const value of ["http://www.linkedin.com/in/test", "https://linkedin.com.evil.test/in/test", "https://evil.test@www.linkedin.com/in/test", "https://www.linkedin.com/in/a%2Fb"]) {
+ assert.equal(canonicalPersonUrl(value),null,"unsafe profile URL must be rejected: "+value);
+}
+const repeatedIdentity=Array.from({length:40},(_,i)=>({capture_id:i+1,profile_key:i%2?"https://br.linkedin.com/in/ANA-Silva/?trk=foo":"https://www.linkedin.com/in/ana-silva",field_key:"full_name",verdict:"correct",reviewed_at:new Date(2026,0,i+1).toISOString()}));
+assert.equal(computeQuality(repeatedIdentity).profiles_reviewed,1,"40 captures of one LinkedIn identity cannot homologate");
+assert.equal(computeQuality(repeatedIdentity).homologated,false);
+const revised=[{capture_id:1,profile_key:"https://br.linkedin.com/in/ana/",field_key:"current_title",verdict:"correct",reviewed_at:"2026-10-01T00:00:00Z"},{capture_id:2,profile_key:"https://www.linkedin.com/in/ANA",field_key:"current_title",verdict:"incorrect",reviewed_at:"2026-10-02T00:00:00Z"}];
+assert.equal(computeQuality(revised).fields.current_title.incorrect,1,"newest review must prevail");
+assert.equal(computeQuality(revised).fields.current_title.correct,0);
 assert.equal(REVIEW_FIELDS.length,10);
 const flags=evidenceFlags({current_company:"A"},{company_name:"B"});
 assert.ok(flags.flags.includes("company_identity_conflict"));
