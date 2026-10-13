@@ -219,3 +219,20 @@ assert.equal(danielClicked.attempt_index, 0);
 assert.ok(danielClicked.target_count >= 1);
 
 console.log("Extractor regressions: VitalCura company About page, legacy, classless, title-less, noisy top-card, ranked href-less-current-company resolution, missing-name/title/company, generic-title and missing-location guards OK");
+
+
+// Forty synthetic DOM permutations; distinct from real authenticated profile acceptance.
+const simulatedNames=["Ana Silva","Bruno Oliveira","Carla Ribeiro","Daniel Moreira","Eduarda Nunes","Felipe Andrade","Gabriela Lima","Henrique Alves"];
+const simulatedCompanies=["Pagaleve","VitalCura","Ayude","Atlântico Tecnologia","Orion Payments"];
+const simulatedCities=["São Paulo, Brasil","Rio de Janeiro, Brasil","Porto Alegre, Brasil","Curitiba, Brasil","Recife, Brasil"];
+for (let i=0;i<40;i++) {
+ const name=simulatedNames[i%simulatedNames.length],company=simulatedCompanies[i%simulatedCompanies.length];
+ const slug="qa-company-"+i;
+ const title=["CEO & Founder","CFO","Diretor Financeiro","Head of Credit","CTO"][i%5];
+ const actual=capture({name,title,place:simulatedCities[i%5],company,slug,unrelated:"Empresa não relacionada",modern:i%2===0,prependNoise:i%3===0,includeExperience:i%4===0});
+ assert.equal(actual.ok,true,"synthetic extractor case "+i+" should succeed");
+ assert.equal(actual.profile.full_name,name);
+ assert.equal(actual.profile.current_company,company);
+ assert.equal(actual.profile.current_title,title);
+}
+console.log("Extractor: 40 synthetic DOM variants OK; real LinkedIn validation still required.");
