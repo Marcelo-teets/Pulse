@@ -54,3 +54,12 @@ Um `quality_score` derivado da existência dos campos ou dos logs da extensão *
 - Não coletar mais dados pessoais do que o necessário; minimizar retenção e permitir revisão das rotinas de exclusão LGPD.
 - Fit DCM não é análise de crédito nem prova de necessidade de captação, e deve ser confirmado comercialmente.
 - Não prometer dados de produção ou precisão real até a execução dos testes autenticados.
+
+## Auditoria adicional — 13/10/2026 — normalização e sincronização
+- Código atualizado na branch `feat/pulse-qa-intelligence-2026-10-13`: `lib/linkedin-identity.js` é o normalizador compartilhado de pessoas e empresas. Neon Function, matcher do Google Sheets e cálculo de precisão utilizam URLs HTTPS `www.linkedin.com` sem parâmetros ou variações `br.linkedin.com`. URLs de domínios parecidos, HTTP, credenciais e slugs com barra codificada são rejeitadas.
+- O cálculo de precisão agora considera apenas o resultado mais recente por **identidade canônica de perfil e campo**. Quarenta capturas do mesmo perfil não equivalem a quarenta perfis reais; novas regressões cobrem duplicatas e alteração da avaliação.
+- GitHub Actions após correções, commit `ed2d01be4267700dc53fd1cfe3e98a81ee5168ae`: [Frontend CI #174](https://github.com/Marcelo-teets/Pulse/actions/runs/38440180688), [LinkedIn Extension CI #139](https://github.com/Marcelo-teets/Pulse/actions/runs/38440180826) e [Pulse Full QA #129](https://github.com/Marcelo-teets/Pulse/actions/runs/38440180659) concluídos com sucesso. **Reexecutar os mesmos gates se houver alterações posteriores**.
+- Neon produção `little-hat-27601841`: 0 capturas de perfis, 0 perfis distintos, 0 capturas de empresas e seis dispositivos antigos; portanto, **nenhuma homologação factual de precisão ocorreu**.
+- Google Drive contém `Pulse - LinkedIn Capture - Base de Armazenamento`, mas a Vercel registrou erro real em `/api/internal/sheets-sync`: Google Sheets API desabilitada/não utilizada no projeto Google Cloud **116474980565**. Requer habilitar **Google Sheets API** no projeto efetivamente usado pela conta de serviço e testar uma gravação verdadeira. Fila vazia não é prova de integração.
+- Vercel rejeitou listar variáveis de ambiente com HTTP 403; não alterar credenciais sem escopo autorizado. Preview READY é apenas build, não smoke test autenticado.
+- **Bloqueio de promoção:** cumprir issue #16 e liberar a Fase 1 antes de merge. A Fase 2, 3 e 4 permanecem na branch, mas não estão homologadas nem em produção. Não inventar testes com sessão LinkedIn ou contagens de perfil.
