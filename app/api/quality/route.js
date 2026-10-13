@@ -9,7 +9,7 @@ export async function GET() {
  try {
   const [captures,reviews]=await Promise.all([
    db.query("SELECT p.id::text AS capture_id,p.full_name,p.linkedin_url,p.location,p.current_title,p.current_company,p.captured_at,c.company_name,c.linkedin_url AS company_linkedin_url,c.description,c.website,c.employee_count FROM public.linkedin_profile_captures p LEFT JOIN public.linkedin_company_captures c ON c.person_capture_id=p.id ORDER BY p.captured_at DESC LIMIT 50"),
-   db.query("SELECT capture_id::text,field_key,verdict,expected_value,reviewed_at FROM public.pulse_capture_reviews WHERE capture_id IN (SELECT capture_id FROM public.pulse_capture_reviews GROUP BY capture_id ORDER BY max(reviewed_at) DESC LIMIT 50)")
+   db.query("WITH candidates AS (SELECT p.id,p.linkedin_url,MAX(r.reviewed_at) AS latest_review FROM public.linkedin_profile_captures p JOIN public.pulse_capture_reviews r ON r.capture_id=p.id GROUP BY p.id,p.linkedin_url), chosen AS (SELECT DISTINCT ON (linkedin_url) id,linkedin_url,latest_review FROM candidates ORDER BY linkedin_url,latest_review DESC), sample AS (SELECT id FROM chosen ORDER BY latest_review DESC LIMIT 50) SELECT r.capture_id::text,r.field_key,r.verdict,r.expected_value,r.reviewed_at,p.linkedin_url AS profile_key FROM public.pulse_capture_reviews r JOIN sample s ON s.id=r.capture_id JOIN public.linkedin_profile_captures p ON p.id=r.capture_id")
   ]);
   const items=captures.rows.map(p=>({ ...p, evidence:evidenceFlags(p,{company_name:p.company_name,linkedin_url:p.company_linkedin_url,description:p.description,website:p.website,employee_count:p.employee_count}),
    reviews:Object.fromEntries(reviews.rows.filter(r=>r.capture_id===p.capture_id).map(r=>[r.field_key,{verdict:r.verdict,expected_value:r.expected_value}])) }));
