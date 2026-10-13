@@ -29,10 +29,22 @@ function Metric({ label, value, hint, accent }) {
   );
 }
 
-function DeviceStatus({ status }) {
+const MIN_EXTENSION_VERSION = "0.8.9";
+function extensionOutdated(value) {
+  const parts = String(value || "").split(".").map(Number);
+  const minimum = MIN_EXTENSION_VERSION.split(".").map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part) || part < 0)) return true;
+  for (let i = 0; i < 3; i++) {
+    if (parts[i] !== minimum[i]) return parts[i] < minimum[i];
+  }
+  return false;
+}
+
+function DeviceStatus({ status, version }) {
   const normalized = status || "active";
-  const label = normalized === "active" ? "Ativo" : normalized === "revoked" ? "Revogado" : "Expirado";
-  return <span className={"status-pill " + (normalized === "active" ? "synced" : "error")}>{label}</span>;
+  const outdated = normalized === "active" && extensionOutdated(version);
+  const label = outdated ? "Atualização necessária" : normalized === "active" ? "Ativo" : normalized === "revoked" ? "Revogado" : "Expirado";
+  return <span className={"status-pill " + (normalized === "active" && !outdated ? "synced" : "error")}>{label}</span>;
 }
 
 export default function OperationsPage() {
@@ -79,6 +91,7 @@ export default function OperationsPage() {
   }, [load]);
 
   const s = data.summary || {};
+  const outdatedDevices = (data.devices || []).filter((device) => device.status === "active" && extensionOutdated(device.extension_version));
 
   return (
     <PageShell
@@ -99,6 +112,13 @@ export default function OperationsPage() {
           <strong>{data.connected ? "OK" : "—"}</strong>
         </div>
       </section>
+
+      {outdatedDevices.length > 0 && (
+        <p className="form-error" role="alert">
+          {outdatedDevices.length} dispositivo(s) pareado(s) com extensão incompatível.
+          Atualize para a versão v0.9.2 e recarregue a extensão no Chrome antes de capturar.
+        </p>
+      )}
 
       <section className="metrics-grid">
         <Metric label="Dispositivos ativos" value={s.active_devices} hint="credenciais válidas" accent />
@@ -126,7 +146,7 @@ export default function OperationsPage() {
                 {data.devices?.length ? data.devices.map((device) => (
                   <tr key={device.device_id}>
                     <td><b>{device.device_name || "Chrome"}</b><small>{device.device_id}</small></td>
-                    <td><DeviceStatus status={device.status} /></td>
+                    <td><DeviceStatus status={device.status} version={device.extension_version} /></td>
                     <td>{device.extension_version || "—"}</td>
                     <td>{fmt(device.last_seen_at || device.created_at)}</td>
                     <td>{fmt(device.token_expires_at)}</td>
