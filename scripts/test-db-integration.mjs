@@ -211,6 +211,24 @@ try {
   assert.equal(latestPerson.current_title,"CEO");
   assert.equal(latestPerson.company_name,"Company Latest","QA must show only latest linked company capture");
 
+  // The previous capture was human-reviewed; that opinion MUST NOT certify
+  // a newer (potentially different) snapshot of the same LinkedIn profile.
+  const freshIds=reviewSample.rows.map(row=>String(row.id));
+  const freshReviews=await db.query(`
+    SELECT r.capture_id::text,r.field_key,r.verdict
+    FROM public.pulse_capture_reviews r
+    JOIN public.linkedin_profile_captures p ON p.id=r.capture_id
+    WHERE r.capture_id=ANY($1::bigint[])
+  `,[freshIds]);
+  assert.equal(freshReviews.rowCount,0,"Old verified snapshots must not make fresh recaptures pass QA");
+  await db.query("INSERT INTO public.pulse_capture_reviews(capture_id,field_key,verdict,reviewer_id) VALUES($1,'full_name','correct',$2)",[dupId,u1]);
+  const verifiedLatest=await db.query(
+    "SELECT r.capture_id::text,r.verdict FROM public.pulse_capture_reviews r WHERE r.capture_id=ANY($1::bigint[])",
+    [freshIds]
+  );
+  assert.equal(verifiedLatest.rowCount,1,"Only the latest capture review can be counted");
+  assert.equal(verifiedLatest.rows[0].capture_id,String(dupId));
+
   // Schema initialization must remain safe after data already exists.
   const schemaC = await import("../lib/schema.js?instance=c");
   await schemaC.ensureSchema(db);
