@@ -3,6 +3,21 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const script = fs.readFileSync("extensions/linkedin-capture/content.js", "utf8");
+const backgroundScript=fs.readFileSync("extensions/linkedin-capture/background.js","utf8");
+const helperStart=backgroundScript.indexOf("function companyIdentityUrl(");
+const helperEnd=backgroundScript.indexOf("function completePerson(",helperStart);
+assert.ok(helperStart>=0&&helperEnd>helperStart,"canonical company URL helper must be testable");
+const companyHelpers=vm.runInNewContext(backgroundScript.slice(helperStart,helperEnd)+"\\n({companyIdentityUrl,companyAboutUrl})",{URL,encodeURIComponent,decodeURIComponent});
+const {companyIdentityUrl,companyAboutUrl}=companyHelpers;
+assert.equal(companyIdentityUrl("https://br.linkedin.com/company/ACME-123/about/?trk=footer"),"https://www.linkedin.com/company/acme-123");
+assert.equal(companyIdentityUrl("https://www.linkedin.com/company/acme-123/"),"https://www.linkedin.com/company/acme-123");
+assert.equal(companyIdentityUrl("https://linkedin.com/company/acme-123/about/"),"https://www.linkedin.com/company/acme-123");
+assert.equal(companyAboutUrl("https://br.linkedin.com/company/ACME-123/?trk=profile"),"https://www.linkedin.com/company/acme-123/about/");
+assert.notEqual(companyIdentityUrl("https://br.linkedin.com/company/acme-123/about/"),companyIdentityUrl("https://www.linkedin.com/company/another")); // real redirect to another company must be blocked
+for(const unsafe of ["http://linkedin.com/company/acme-123","https://linkedin.com.evil.test/company/acme-123","https://evil.test@www.linkedin.com/company/acme-123","https://www.linkedin.com/company/acme-123/posts/","https://www.linkedin.com/company/a%2Fb"]){
+ assert.equal(companyIdentityUrl(unsafe),"","invalid or unrelated company URL must be rejected: "+unsafe);
+}
+
 function node(text = "", children = [], attributes = {}) {
   const element = {
     innerText: text, textContent: text, children, attributes, tagName: "", clicked: false,
