@@ -229,6 +229,20 @@ try {
   assert.equal(verifiedLatest.rowCount,1,"Only the latest capture review can be counted");
   assert.equal(verifiedLatest.rows[0].capture_id,String(dupId));
 
+  // Stale capture protection is evaluated by PostgreSQL using actual capture ordering.
+  const staleCheck=await db.query(`
+    SELECT p.id,EXISTS(
+      SELECT 1 FROM public.linkedin_profile_captures newer
+      WHERE newer.linkedin_url=p.linkedin_url
+        AND (newer.captured_at,newer.id)>(p.captured_at,p.id)
+    ) AS is_stale
+    FROM public.linkedin_profile_captures p WHERE p.id=ANY($1::bigint[])
+    ORDER BY p.id
+  `,[[pc1,dupId]]);
+  assert.equal(staleCheck.rowCount,2);
+  assert.equal(staleCheck.rows.find(x=>String(x.id)===String(pc1)).is_stale,true,"stale revision must be refused");
+  assert.equal(staleCheck.rows.find(x=>String(x.id)===String(dupId)).is_stale,false,"newest version must be reviewable");
+
   // Schema initialization must remain safe after data already exists.
   const schemaC = await import("../lib/schema.js?instance=c");
   await schemaC.ensureSchema(db);
