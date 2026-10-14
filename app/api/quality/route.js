@@ -1,6 +1,6 @@
 import { getPool } from "../../../lib/db";
 import { requireUser } from "../../../lib/auth";
-import { computeQuality,evidenceFlags,REVIEW_FIELDS } from "../../../lib/quality-core.js";
+import { computeQuality,evidenceFlags,REVIEW_FIELDS,reviewValuePresent } from "../../../lib/quality-core.js";
 import { canonicalPersonUrl } from "../../../lib/linkedin-identity.js";
 export const dynamic="force-dynamic";
 export async function GET() {
@@ -34,6 +34,25 @@ export async function POST(request){
  if(verdict==="incorrect"&&!expected)return Response.json({error:"Informe o valor correto encontrado na página."},{status:400});
  const db=getPool();if(!db)return Response.json({error:"Banco indisponível"},{status:503});
  try{
+  const snapshot=await db.query(`
+    SELECT p.id,p.linkedin_url,p.full_name,p.location,p.current_title,p.current_company,
+      c.company_name,c.linkedin_url AS company_linkedin_url,c.description,c.website,c.employee_count,
+      EXISTS(SELECT 1 FROM public.linkedin_profile_captures newer
+             WHERE newer.linkedin_url=p.linkedin_url
+               AND (newer.captured_at,newer.id)>(p.captured_at,p.id)) AS is_stale
+    FROM public.linkedin_profile_captures p
+    LEFT JOIN LATERAL (
+      SELECT company_name,linkedin_url,description,website,employee_count
+      FROM public.linkedin_company_captures
+      WHERE person_capture_id=p.id
+      ORDER BY captured_at DESC,id DESC LIMIT 1
+    ) c ON TRUE
+    WHERE p.id=$1::bigint
+  `,[captureId]);
+  if(!snapshot.rowCount)return Response.json({error:"Captura não encontrada"},{status:404});
+  if(snapshot.rows[0].is_stale)return Response.json({error:"Há uma captura mais recente deste perfil. Recarregue a lista e revise a versão atual."},{status:409});
+  if(verdict==="correct"&&!reviewValuePresent(field,snapshot.rows[0][field]))
+   return Response.json({error:"Não é possível classificar como correto um campo ausente ou um LinkedIn inválido. Use incorreto ou não verificável."},{status:422});
   const result=await db.query("INSERT INTO public.pulse_capture_reviews(capture_id,field_key,verdict,expected_value,reviewer_id) SELECT p.id,$2,$3,$4,$5 FROM public.linkedin_profile_captures p WHERE p.id=$1::bigint ON CONFLICT(capture_id,field_key) DO UPDATE SET verdict=EXCLUDED.verdict,expected_value=EXCLUDED.expected_value,reviewer_id=EXCLUDED.reviewer_id,reviewed_at=NOW() RETURNING capture_id", [captureId,field,verdict,expected||null,user.id]);
   if(!result.rowCount)return Response.json({error:"Captura não encontrada"},{status:404});
   return Response.json({ok:true});
