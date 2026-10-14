@@ -8,16 +8,12 @@ export async function GET() {
  if(user.role!=="master")return Response.json({error:"Apenas master pode revisar capturas."},{status:403});
  const db=getPool(); if(!db)return Response.json({error:"Banco não configurado."},{status:503});
  try {
-  const [captures,reviews]=await Promise.all([
-   db.query("WITH latest_profile AS (SELECT DISTINCT ON (linkedin_url) id,full_name,linkedin_url,location,current_title,current_company,captured_at FROM public.linkedin_profile_captures ORDER BY linkedin_url,captured_at DESC,id DESC) SELECT p.id::text AS capture_id,p.full_name,p.linkedin_url,p.location,p.current_title,p.current_company,p.captured_at,c.company_name,c.linkedin_url AS company_linkedin_url,c.description,c.website,c.employee_count FROM latest_profile p LEFT JOIN LATERAL (SELECT c.company_name,c.linkedin_url,c.description,c.website,c.employee_count FROM public.linkedin_company_captures c WHERE c.person_capture_id=p.id ORDER BY c.captured_at DESC,c.id DESC LIMIT 1) c ON TRUE ORDER BY p.captured_at DESC,p.id DESC LIMIT 50"),
-   db.query("SELECT r.capture_id::text,r.field_key,r.verdict,r.expected_value,r.reviewed_at,p.linkedin_url AS profile_key FROM public.pulse_capture_reviews r JOIN public.linkedin_profile_captures p ON p.id=r.capture_id ORDER BY r.reviewed_at DESC LIMIT 5000")
-  ]);
-  const reviewedIdentities=new Set();
-  const metricRows=reviews.rows.filter(r=>{
-   const identity=canonicalPersonUrl(r.profile_key)||String(r.profile_key||r.capture_id);
-   if(!reviewedIdentities.has(identity)&&reviewedIdentities.size>=50)return false;
-   reviewedIdentities.add(identity);return true;
-  });
+  // The review is evidence for the exact captured snapshot, never for a stale
+  // capture of the same LinkedIn profile. A recapture must be reviewed again.
+  const captures=await db.query("WITH latest_profile AS (SELECT DISTINCT ON (linkedin_url) id,full_name,linkedin_url,location,current_title,current_company,captured_at FROM public.linkedin_profile_captures ORDER BY linkedin_url,captured_at DESC,id DESC) SELECT p.id::text AS capture_id,p.full_name,p.linkedin_url,p.location,p.current_title,p.current_company,p.captured_at,c.company_name,c.linkedin_url AS company_linkedin_url,c.description,c.website,c.employee_count FROM latest_profile p LEFT JOIN LATERAL (SELECT c.company_name,c.linkedin_url,c.description,c.website,c.employee_count FROM public.linkedin_company_captures c WHERE c.person_capture_id=p.id ORDER BY c.captured_at DESC,c.id DESC LIMIT 1) c ON TRUE ORDER BY p.captured_at DESC,p.id DESC LIMIT 50");
+  const captureIds=captures.rows.map(p=>p.capture_id);
+  const reviews=captureIds.length?await db.query("SELECT r.capture_id::text,r.field_key,r.verdict,r.expected_value,r.reviewed_at,p.linkedin_url AS profile_key FROM public.pulse_capture_reviews r JOIN public.linkedin_profile_captures p ON p.id=r.capture_id WHERE r.capture_id=ANY($1::bigint[]) ORDER BY r.reviewed_at DESC", [captureIds]):{rows:[]};
+  const metricRows=reviews.rows;
   const items=captures.rows.map(p=>({ ...p, evidence:evidenceFlags(p,{company_name:p.company_name,linkedin_url:p.company_linkedin_url,description:p.description,website:p.website,employee_count:p.employee_count}),
    reviews:Object.fromEntries(metricRows.filter(r=>r.capture_id===p.capture_id).map(r=>[r.field_key,{verdict:r.verdict,expected_value:r.expected_value}])) }));
   return Response.json({connected:true,items,stats:computeQuality(metricRows),fields:REVIEW_FIELDS});
