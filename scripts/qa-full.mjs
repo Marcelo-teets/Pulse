@@ -21,14 +21,24 @@ const critical = [
   "vercel.json",
   "scripts/build-neon-linkedin-function.mjs",
   "scripts/test-linkedin-api-bundle.mjs",
+  "scripts/test-sheets-company-match.mjs",
+  "lib/sheets-company-match.js",
   "migrations/004_company_linkedin_identity.sql",
-  "migrations/005_login_rate_limit.sql"
+  "migrations/005_login_rate_limit.sql",
+  "migrations/006_quality_intelligence.sql",
+  "lib/quality-core.js",
+  "lib/dcm-fit.js",
+  "lib/csv-safe.js",
+  "lib/linkedin-identity.js",
+  "lib/sheets-health.js",
+  "scripts/test-sheets-health.mjs"
 ];
+critical.push("app/api/quality/route.js","app/api/intelligence/route.js","app/api/intelligence/export/route.js","app/api/operations/retry/route.js","app/api/operations/health/route.js","app/qualidade/page.js","app/inteligencia/page.js","scripts/test-pulse-quality.mjs");
 critical.forEach(exists);
 
 const manifest = JSON.parse(read("extensions/linkedin-capture/manifest.json"));
 assert.equal(manifest.manifest_version, 3);
-assert.equal(manifest.version, "0.9.1");
+assert.equal(manifest.version, "0.9.2");
 assert.ok(manifest.permissions.includes("scripting"));
 assert.ok(manifest.content_scripts.some((x) => x.matches.some((m) => m.includes("linkedin.com/in/"))));
 
@@ -73,7 +83,7 @@ for (const marker of [
   "chrome.scripting.executeScript",
   "companyAboutUrl"
 ]) assert.ok(bg.includes(marker), `missing background safeguard: ${marker}`);
-assert.ok(bg.includes("actualUrl.origin!==expected.origin") && bg.includes("actualPath!==expectedPath"), "exact company page URL identity guard missing");
+assert.ok(bg.includes("companyIdentityUrl(actual.url||\"\")!==expected") && bg.includes("function companyIdentityUrl("), "canonical LinkedIn company identity guard missing");
 assert.ok(bg.includes("nome canônico da empresa"), "canonical company-name reconciliation missing");
 assert.ok(bg.includes("safeEndpoint"), "API endpoint allowlist guard missing");
 assert.ok(bg.includes("resolveCanonical"), "extension must resolve canonical identity before company scraping");
@@ -123,7 +133,7 @@ assert.ok(dropDevice >= 0 && createDevice > dropDevice, "device view recreation 
 assert.ok(dropAudit >= 0 && createAudit > dropAudit, "audit view recreation is not idempotent");
 assert.ok(schema.includes("pg_advisory_xact_lock"), "schema initialization is not serialized across serverless instances");
 assert.ok(schema.includes("ROLLBACK"), "schema initialization rollback guard missing");
-assert.ok(schema.includes("SCHEMA_VERSION = 6"), "runtime schema version missing");
+assert.ok(schema.includes("SCHEMA_VERSION = 7"), "runtime schema version missing");
 assert.ok(schema.includes("pulse_schema_meta"), "runtime schema metadata table missing");
 assert.ok(schema.includes("Number(current.rows[0]?.version || 0) < SCHEMA_VERSION"), "runtime schema version gate missing");
 assert.ok(schema.includes("ux_linkedin_companies_linkedin_url"), "stable company LinkedIn URL unique index missing");
@@ -176,9 +186,32 @@ const configPage = read("app/configuracao/page.js");
 assert.ok(configPage.includes("if (!response.ok || !payload.code)"), "pairing UI must surface backend failures");
 assert.ok(configPage.includes("finally"), "pairing UI loading state must always recover");
 
+const qualityRoute = read("app/api/quality/route.js");
+assert.ok(qualityRoute.includes("DISTINCT ON (linkedin_url)"), "QA sample must contain distinct LinkedIn people");
+assert.ok(qualityRoute.includes("captureIds=captures.rows.map"), "QA must select current capture IDs before reading reviews");
+assert.ok(qualityRoute.includes("r.capture_id=ANY($1::bigint[])"), "Historical reviews must not approve new profile recaptures");
+assert.ok(qualityRoute.includes("reviewValuePresent(field,snapshot.rows[0][field])"), "Blank fields must never be reviewed as correct");
+assert.ok(qualityRoute.includes("newer.captured_at,newer.id") && qualityRoute.includes("status:409"), "Stale captures must be rejected by the POST endpoint");
+assert.ok(read("lib/quality-core.js").includes("export function reviewValuePresent("), "Missing factual evidence validation utility");
 const operationsPage = read("app/operacao/page.js");
 assert.ok(operationsPage.includes("response.status === 403"), "operations page must handle forbidden access");
 
+const peopleApi = read("app/api/people/route.js");
+const companiesApi = read("app/api/companies/route.js");
+for (const [name, code] of [["people", peopleApi], ["companies", companiesApi]]) {
+  assert.ok(code.includes("OFFSET ${offsetRef}"), name + " SQL must support pagination");
+  assert.ok(code.includes("Number.isFinite(rawLimit)"), name + " must reject invalid page-size input");
+  assert.ok(code.includes("Number.isSafeInteger(rawPage)"), name + " must reject invalid page input");
+}
+for (const pageFile of ["app/pessoas/page.js", "app/empresas/page.js"]) {
+  const code = read(pageFile);
+  assert.ok(code.includes("&page="), pageFile + " must load paginated results");
+  assert.ok(code.includes("Página {page} de"), pageFile + " must show page navigation");
+}
+assert.ok(read("app/operacao/page.js").includes("Atualização necessária"), "Old Chrome versions must be visible in operations UI");
+const healthRoute = read("app/api/operations/health/route.js");
+assert.ok(healthRoute.includes("inspectSheetsConnection"), "Operations endpoint must query real Sheets connectivity rather than infer from empty queue");
+assert.ok(read("app/operacao/page.js").includes("Google Sheets API desabilitada"), "Operations UI must explain disabled Sheets API");
 const worker = read("app/api/internal/sheets-sync/route.js");
 for (const marker of [
   "FOR UPDATE SKIP LOCKED",
@@ -194,10 +227,14 @@ for (const marker of [
   'getValues(token, "Capturas!A2:A")',
   "existingCaptureIds",
   "company_linkedin_url",
-  "companyRowByName",
+  "findCompanySheetRow",
   'const LINKEDIN_API_VERSION = "0.8.1"',
   "metricsUpdated: true"
 ]) assert.ok(worker.includes(marker), `missing Sheets worker invariant: ${marker}`);
+assert.ok(!worker.includes("companyRowByName"), "Unsafe name-only Sheets matching must be retired");
+const sheetMatch = read("lib/sheets-company-match.js");
+assert.ok(sheetMatch.includes("companyLinkedinKey"), "Canonical company matcher missing");
+assert.ok(sheetMatch.includes("legacy.length !== 1"), "Ambiguous legacy company matcher must be fail-closed");
 assert.ok(worker.includes("fetchWithTimeout"), "Google API calls must be bounded by timeouts");
 assert.ok(worker.includes("AbortSignal.timeout"), "Google API timeout signal missing");
 const emptyQueuePos = worker.indexOf("if (!ids.length)");
@@ -254,9 +291,9 @@ for (const file of scanFiles) {
 }
 
 const extensionReadme = read("extensions/linkedin-capture/README.md");
-assert.ok(extensionReadme.includes("v0.9.1"), "extension README version is stale");
+assert.ok(extensionReadme.includes("v0.9.2"), "extension README version is stale");
 const architecture = read("docs/linkedin-capture-architecture.md");
-assert.ok(architecture.includes("v0.9.1"), "architecture extension version is stale");
+assert.ok(architecture.includes("v0.9.2"), "architecture extension version is stale");
 assert.ok(architecture.includes("API v0.8.1"), "architecture API version is stale");
 
 console.log("Pulse full structural QA: OK");

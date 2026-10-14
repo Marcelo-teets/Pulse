@@ -27,7 +27,7 @@ try {
     "linkedin_profile_captures","linkedin_company_captures","linkedin_sheet_sync_queue",
     "linkedin_people","linkedin_companies","linkedin_current_roles","linkedin_devices",
     "linkedin_pairing_codes","linkedin_api_audit","pulse_users","pulse_sessions",
-    "pulse_user_people","pulse_user_companies","pulse_schema_meta","pulse_login_attempts"
+    "pulse_user_people","pulse_user_companies","pulse_schema_meta","pulse_login_attempts", "pulse_capture_reviews", "pulse_role_events"
   ];
   const tables = await db.query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
@@ -157,13 +157,99 @@ try {
   assert.equal(Number(ops.rows[0].unique_companies), 1);
   assert.equal(Number(ops.rows[0].active_devices), 1);
 
+  // Quality review and role-event persistence on real Postgres.
+  await db.query("INSERT INTO public.pulse_capture_reviews(capture_id,field_key,verdict,reviewer_id) VALUES($1,'full_name','correct',$2)",[pc1,u1]);
+  const reviews=await db.query("SELECT field_key,verdict FROM public.pulse_capture_reviews WHERE capture_id=$1",[pc1]);
+  assert.equal(reviews.rows[0].verdict,"correct");
+  const role0=await db.query("SELECT count(*)::int n FROM public.pulse_role_events WHERE person_id=$1",[cp1.rows[0].id]);
+  assert.equal(role0.rows[0].n,1);
+  await db.query("UPDATE public.linkedin_current_roles SET current_title='COO' WHERE person_id=$1",[cp1.rows[0].id]);
+  const role1=await db.query("SELECT count(*)::int n FROM public.pulse_role_events WHERE person_id=$1",[cp1.rows[0].id]);
+  assert.equal(role1.rows[0].n,2);
+
+  // QA sample must display distinct LinkedIn profiles instead of 50 repeat captures.
+  const duplicateCapture = await db.query(`
+    INSERT INTO public.linkedin_profile_captures
+      (request_id,full_name,linkedin_url,location,current_title,current_company,captured_at,raw_json,owner_user_id)
+    VALUES ('00000000-0000-4000-8000-000000000003','Pessoa Um','https://www.linkedin.com/in/pessoa-um',
+      'SP','CEO','Empresa QA',NOW() + INTERVAL '2 seconds','{}',$1)
+    RETURNING id
+  `,[u1]);
+  const dupId=duplicateCapture.rows[0].id;
+  await db.query(`
+    INSERT INTO public.linkedin_company_captures
+      (request_id,person_capture_id,company_name,description,website,employee_count,captured_at,owner_user_id)
+    VALUES ('00000000-0000-4000-8000-000000000003',$1,'Company Earlier','old',
+      'https://old.example','1-10',NOW(),$2)
+  `,[dupId,u1]);
+  await db.query(`
+    INSERT INTO public.linkedin_company_captures
+      (request_id,person_capture_id,company_name,description,website,employee_count,captured_at,owner_user_id)
+    VALUES ('00000000-0000-4000-8000-000000000004',$1,'Company Latest','new',
+      'https://new.example','51-200',NOW()+INTERVAL '1 second',$2)
+  `,[dupId,u1]);
+  const reviewSample=await db.query(`
+    WITH latest_profile AS (
+      SELECT DISTINCT ON (linkedin_url)
+        id,full_name,linkedin_url,location,current_title,current_company,captured_at
+      FROM public.linkedin_profile_captures
+      ORDER BY linkedin_url,captured_at DESC,id DESC
+    )
+    SELECT p.id,p.linkedin_url,p.current_title,c.company_name
+    FROM latest_profile p
+    LEFT JOIN LATERAL (
+      SELECT c.company_name,c.linkedin_url,c.description,c.website,c.employee_count
+      FROM public.linkedin_company_captures c
+      WHERE c.person_capture_id=p.id
+      ORDER BY c.captured_at DESC,c.id DESC LIMIT 1
+    ) c ON TRUE
+    ORDER BY p.captured_at DESC,p.id DESC LIMIT 50
+  `);
+  assert.equal(reviewSample.rowCount,2,"50-slot QA sample must count people, not captures");
+  const latestPerson=reviewSample.rows.find(row=>row.linkedin_url==="https://www.linkedin.com/in/pessoa-um");
+  assert.equal(String(latestPerson.id),String(dupId));
+  assert.equal(latestPerson.current_title,"CEO");
+  assert.equal(latestPerson.company_name,"Company Latest","QA must show only latest linked company capture");
+
+  // The previous capture was human-reviewed; that opinion MUST NOT certify
+  // a newer (potentially different) snapshot of the same LinkedIn profile.
+  const freshIds=reviewSample.rows.map(row=>String(row.id));
+  const freshReviews=await db.query(`
+    SELECT r.capture_id::text,r.field_key,r.verdict
+    FROM public.pulse_capture_reviews r
+    JOIN public.linkedin_profile_captures p ON p.id=r.capture_id
+    WHERE r.capture_id=ANY($1::bigint[])
+  `,[freshIds]);
+  assert.equal(freshReviews.rowCount,0,"Old verified snapshots must not make fresh recaptures pass QA");
+  await db.query("INSERT INTO public.pulse_capture_reviews(capture_id,field_key,verdict,reviewer_id) VALUES($1,'full_name','correct',$2)",[dupId,u1]);
+  const verifiedLatest=await db.query(
+    "SELECT r.capture_id::text,r.verdict FROM public.pulse_capture_reviews r WHERE r.capture_id=ANY($1::bigint[])",
+    [freshIds]
+  );
+  assert.equal(verifiedLatest.rowCount,1,"Only the latest capture review can be counted");
+  assert.equal(verifiedLatest.rows[0].capture_id,String(dupId));
+
+  // Stale capture protection is evaluated by PostgreSQL using actual capture ordering.
+  const staleCheck=await db.query(`
+    SELECT p.id,EXISTS(
+      SELECT 1 FROM public.linkedin_profile_captures newer
+      WHERE newer.linkedin_url=p.linkedin_url
+        AND (newer.captured_at,newer.id)>(p.captured_at,p.id)
+    ) AS is_stale
+    FROM public.linkedin_profile_captures p WHERE p.id=ANY($1::bigint[])
+    ORDER BY p.id
+  `,[[pc1,dupId]]);
+  assert.equal(staleCheck.rowCount,2);
+  assert.equal(staleCheck.rows.find(x=>String(x.id)===String(pc1)).is_stale,true,"stale revision must be refused");
+  assert.equal(staleCheck.rows.find(x=>String(x.id)===String(dupId)).is_stale,false,"newest version must be reviewable");
+
   // Schema initialization must remain safe after data already exists.
   const schemaC = await import("../lib/schema.js?instance=c");
   await schemaC.ensureSchema(db);
   const stillThere = await db.query("SELECT count(*)::int AS n FROM public.linkedin_people");
   assert.equal(stillThere.rows[0].n, 2);
   const schemaVersion = await db.query("SELECT version FROM public.pulse_schema_meta WHERE key='runtime'");
-  assert.equal(schemaVersion.rows[0].version, 6);
+  assert.equal(schemaVersion.rows[0].version, 7);
   const companyIdentityColumns = await db.query(
     "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND column_name='linkedin_url' AND table_name IN ('linkedin_company_captures','linkedin_companies') ORDER BY table_name"
   );

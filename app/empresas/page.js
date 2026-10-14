@@ -8,15 +8,18 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(value));
 }
 
+const PAGE_SIZE = 50;
+
 export default function EmpresasPage() {
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [data, setData] = useState({ items: [], total: 0, connected: true });
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (term = "") => {
+  const load = useCallback(async (term = "", nextPage = 1) => {
     setLoading(true);
     try {
-      const response = await fetch("/api/companies?q=" + encodeURIComponent(term), { cache: "no-store" });
+      const response = await fetch("/api/companies?q=" + encodeURIComponent(term) + "&limit=" + PAGE_SIZE + "&page=" + nextPage, { cache: "no-store" });
       if (response.status === 401) {
         window.location.href = "/auth";
         return;
@@ -32,6 +35,7 @@ export default function EmpresasPage() {
         connected: payload.connected !== false,
         message: payload.message || "",
       });
+      setPage(nextPage);
     } catch {
       setData({ items: [], total: 0, connected: false, message: "Não foi possível consultar empresas." });
     } finally {
@@ -39,12 +43,12 @@ export default function EmpresasPage() {
     }
   }, []);
 
-  useEffect(() => { load(""); }, [load]);
+  useEffect(() => { load("", 1); }, [load]);
 
   return (
     <PageShell
       title="Empresas"
-      actions={<button type="button" className="ghost-button" onClick={() => load(query)}>{loading ? "Atualizando…" : "Atualizar"}</button>}
+      actions={<><a className="ghost-button" href="/api/intelligence/export?type=companies">Exportar CSV</a><button type="button" className="ghost-button" onClick={() => load(query, page)}>{loading ? "Atualizando…" : "Atualizar"}</button></>}
     >
       <section className="section-intro">
         <div>
@@ -64,7 +68,7 @@ export default function EmpresasPage() {
             <p className="eyebrow">BASE</p>
             <h3>Empresas mapeadas</h3>
           </div>
-          <form className="search-box wide" onSubmit={(event) => { event.preventDefault(); load(query); }}>
+          <form className="search-box wide" onSubmit={(event) => { event.preventDefault(); load(query, 1); }}>
             <span>⌕</span>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por empresa, site, descrição ou headcount" />
           </form>
@@ -114,6 +118,13 @@ export default function EmpresasPage() {
             </tbody>
           </table>
         </div>
+        {data.total > PAGE_SIZE && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "18px 20px" }}>
+            <button type="button" className="ghost-button" disabled={loading || page <= 1} onClick={() => load(query, page - 1)}>Anterior</button>
+            <span aria-live="polite">Página {page} de {Math.ceil(data.total / PAGE_SIZE)}</span>
+            <button type="button" className="ghost-button" disabled={loading || page * PAGE_SIZE >= data.total} onClick={() => load(query, page + 1)}>Próxima</button>
+          </div>
+        )}
       </article>
     </PageShell>
   );

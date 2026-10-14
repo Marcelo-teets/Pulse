@@ -2,6 +2,8 @@
 const LINKEDIN_API_VERSION = "0.8.1";
 import { createSign } from "node:crypto";
 import pg from "pg";
+import { findCompanySheetRow, indexPeopleSheetRows, appendedSheetRow } from "../../../../lib/sheets-company-match.js";
+import { canonicalPersonUrl } from "../../../../lib/linkedin-identity.js";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -100,23 +102,6 @@ async function updateValues(token, range, values) {
     `values/${encodeURIComponent(range)}?valueInputOption=RAW`,
     { method: "PUT", body: JSON.stringify({ majorDimension: "ROWS", values }) }
   );
-}
-
-function normalizeCompanyName(name) {
-  return String(name || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function normalizeCompanyKey(name, website, linkedinUrl) {
-  const linked = String(linkedinUrl || "").trim().replace(/\/$/, "").toLowerCase();
-  if (linked) return `linkedin:${linked}`;
-  let host = "";
-  try { host = website ? new URL(website).hostname.toLowerCase().replace(/^www\./, "") : ""; } catch {}
-  return `${normalizeCompanyName(name)}|${host}`;
 }
 
 async function claimBatch(database, limit = 20) {
@@ -249,31 +234,17 @@ export async function GET(request) {
     const companyRows = companiesSheet.values || [];
     const existingCaptureIds = new Set((capturesSheet.values || []).map((row) => String(row?.[0] || "").trim()).filter(Boolean));
 
-    const personRowByUrl = new Map();
-    peopleRows.forEach((row, index) => {
-      const url = String(row?.[2] || "").trim().replace(/\/$/, "");
-      if (url) personRowByUrl.set(url, index + 2);
-    });
-    let nextPersonRow = peopleRows.length + 2;
+    // Reject homonymous profile identities before any Google Sheets write.
+    const personRowByUrl = indexPeopleSheetRows(peopleRows);
 
-    const companyRowByKey = new Map();
-    const companyRowByName = new Map();
-    companyRows.forEach((row, index) => {
-      const rowNumber = index + 2;
-      const key = normalizeCompanyKey(row?.[2], row?.[4], row?.[7]);
-      if (key !== "|") companyRowByKey.set(key, rowNumber);
-      const nameKey = normalizeCompanyName(row?.[2]);
-      if (nameKey && !companyRowByName.has(nameKey)) companyRowByName.set(nameKey, rowNumber);
-    });
-    let nextCompanyRow = companyRows.length + 2;
-
+    // Match against the complete current sheet, including rows appended in this batch.
+    // Canonical LinkedIn URL wins; duplicate company names are never enough.
     const captureRows = [];
     const syncedIds = [];
 
     for (const item of payloads) {
-      const personUrl = String(item.linkedin_url || "").replace(/\/$/, "");
-      const companyKey = normalizeCompanyKey(item.company_name, item.company_website, item.company_linkedin_url);
-      const companyNameKey = normalizeCompanyName(item.company_name);
+      const personUrl = canonicalPersonUrl(item.linkedin_url);
+      if (!personUrl) throw new Error("LinkedIn inválido no payload da pessoa.");
 
       if (!existingCaptureIds.has(String(item.sync_id))) {
         captureRows.push([
@@ -311,8 +282,8 @@ export async function GET(request) {
       if (existingPersonRow) {
         await updateValues(token, `Pessoas!A${existingPersonRow}:H${existingPersonRow}`, personValues);
       } else {
-        await appendValues(token, "Pessoas!A:H", personValues);
-        personRowByUrl.set(personUrl, nextPersonRow++);
+        const appended = await appendValues(token, "Pessoas!A:H", personValues);
+        personRowByUrl.set(personUrl, appendedSheetRow(appended, "Pessoas"));
       }
 
       const companyValues = [[
@@ -325,14 +296,13 @@ export async function GET(request) {
         item.company_captured_at ? new Date(item.company_captured_at).toISOString() : "",
         item.company_linkedin_url || "",
       ]];
-      const existingCompanyRow = companyRowByKey.get(companyKey) || companyRowByName.get(companyNameKey);
-      if (existingCompanyRow) {
+      const existingCompanyRow = findCompanySheetRow(companyRows, item);
+      if (existingCompanyRow !== null) {
         await updateValues(token, `Empresas!A${existingCompanyRow}:H${existingCompanyRow}`, companyValues);
+        companyRows[existingCompanyRow - 2] = companyValues[0];
       } else {
-        await appendValues(token, "Empresas!A:H", companyValues);
-        companyRowByKey.set(companyKey, nextCompanyRow);
-        if (companyNameKey && !companyRowByName.has(companyNameKey)) companyRowByName.set(companyNameKey, nextCompanyRow);
-        nextCompanyRow++;
+        const appended = await appendValues(token, "Empresas!A:H", companyValues);
+        companyRows[appendedSheetRow(appended, "Empresas") - 2] = companyValues[0];
       }
 
       syncedIds.push(item.sync_id);

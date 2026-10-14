@@ -3,6 +3,21 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const script = fs.readFileSync("extensions/linkedin-capture/content.js", "utf8");
+const backgroundScript=fs.readFileSync("extensions/linkedin-capture/background.js","utf8");
+const helperStart=backgroundScript.indexOf("function companyIdentityUrl(");
+const helperEnd=backgroundScript.indexOf("function completePerson(",helperStart);
+assert.ok(helperStart>=0&&helperEnd>helperStart,"canonical company URL helper must be testable");
+const companyHelpers=vm.runInNewContext(backgroundScript.slice(helperStart,helperEnd)+"\n({companyIdentityUrl,companyAboutUrl})",{URL,encodeURIComponent,decodeURIComponent});
+const {companyIdentityUrl,companyAboutUrl}=companyHelpers;
+assert.equal(companyIdentityUrl("https://br.linkedin.com/company/ACME-123/about/?trk=footer"),"https://www.linkedin.com/company/acme-123");
+assert.equal(companyIdentityUrl("https://www.linkedin.com/company/acme-123/"),"https://www.linkedin.com/company/acme-123");
+assert.equal(companyIdentityUrl("https://linkedin.com/company/acme-123/about/"),"https://www.linkedin.com/company/acme-123");
+assert.equal(companyAboutUrl("https://br.linkedin.com/company/ACME-123/?trk=profile"),"https://www.linkedin.com/company/acme-123/about/");
+assert.notEqual(companyIdentityUrl("https://br.linkedin.com/company/acme-123/about/"),companyIdentityUrl("https://www.linkedin.com/company/another")); // real redirect to another company must be blocked
+for(const unsafe of ["http://linkedin.com/company/acme-123","https://linkedin.com.evil.test/company/acme-123","https://evil.test@www.linkedin.com/company/acme-123","https://www.linkedin.com/company/acme-123/posts/","https://www.linkedin.com/company/a%2Fb"]){
+ assert.equal(companyIdentityUrl(unsafe),"","invalid or unrelated company URL must be rejected: "+unsafe);
+}
+
 function node(text = "", children = [], attributes = {}) {
   const element = {
     innerText: text, textContent: text, children, attributes, tagName: "", clicked: false,
@@ -40,7 +55,7 @@ function tagged(tag, text, children = [], attrs = {}, classes = []) {
   if (tag === "section") for (const child of children) child.section = n;
   return n;
 }
-function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, school = "", includeExperience = false, messageType = "EXTRACT_PROFILE", expectedCompany = "", attemptIndex = 0 }) {
+function capture({ name, title, place, company, slug, unrelated, omitName = false, omitCompany = false, modern = false, includeContact = modern, pageTitle = null, prependNoise = false, companyAsButton = false, companyHref = "", school = "", schoolFirst = false, includeExperience = false, messageType = "EXTRACT_PROFILE", expectedCompany = "", attemptIndex = 0 }) {
   const nameNode = tagged("div", name, [], {}, modern ? [] : ["text-heading-xlarge"]);
   const header = tagged("section", "", [
     tagged("h1", "Foto do perfil"),
@@ -48,10 +63,11 @@ function capture({ name, title, place, company, slug, unrelated, omitName = fals
     tagged("div", title, [], {}, modern ? [] : ["text-body-medium"]),
     tagged("span", place, [], {}, modern ? [] : ["text-body-small"]),
     ...includeContact ? [tagged("span", "Dados de contato")] : [],
+    ...(school && schoolFirst ? [tagged("button", school, [], {role:"button"})] : []),
     ...omitCompany ? [] : [companyAsButton
       ? tagged("button", company, [], {role:"button"})
-      : tagged("a", `Ver empresa: ${company}`, [], {href:`https://www.linkedin.com/company/${slug}/`})],
-    ...school ? [tagged("button", school, [], {role:"button"})] : []
+      : tagged("a", `Ver empresa: ${company}`, [], {href:companyHref || `https://www.linkedin.com/company/${slug}/`})],
+    ...(school && !schoolFirst ? [tagged("button", school, [], {role:"button"})] : [])
   ]);
   header.innerText = `${name}\n${title}\n${place}\n${includeContact ? "Dados de contato\n" : ""}${omitCompany ? "" : company}`;
   const activity = tagged("section", "Atividades", [tagged("a", unrelated, [], {href:"https://www.linkedin.com/company/unrelated/"})]);
@@ -189,11 +205,21 @@ assert.equal(missingCompanyEvidence.ok, false);
 const weakSingleSignal = capture({name:"Daniela Batista dos Santos",title:"CFO",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,includeContact:false,pageTitle:"LinkedIn"});
 assert.equal(weakSingleSignal.ok, false);
 
+const externalCompany = capture({name:"Daniela Batista dos Santos",title:"CFO",place:"São Paulo e Região",company:"Pagaleve",slug:"pagaleve",unrelated:"Outra empresa",modern:true,companyHref:"https://untrusted.example/company/pagaleve"});
+assert.equal(externalCompany.ok, true);
+assert.equal(externalCompany.profile.current_company, "Pagaleve");
+assert.equal(externalCompany.profile._company_url, "");
+
 const danielHrefLess = capture({name:"Daniel Brandão",title:"Founder | CEO | Banker | Board Member | CFO | Cyclist",place:"Brasil",company:"VitalCura",slug:"vitalcura",unrelated:"Outra empresa",modern:true,companyAsButton:true,school:"Universidade de São Paulo",includeExperience:true});
 assert.equal(danielHrefLess.ok, true);
 assert.equal(danielHrefLess.profile.full_name, "Daniel Brandão");
 assert.equal(danielHrefLess.profile.current_company, "VitalCura");
 assert.equal(danielHrefLess.profile._company_url, "");
+
+const schoolFirst = capture({name:"Daniel Brandão",title:"Founder | CEO | Banker | Board Member | CFO | Cyclist",place:"Brasil",company:"VitalCura",slug:"vitalcura",unrelated:"Outra empresa",modern:true,companyAsButton:true,school:"Universidade de São Paulo",schoolFirst:true,includeExperience:true});
+assert.equal(schoolFirst.ok, true);
+assert.equal(schoolFirst.profile.current_company, "VitalCura");
+assert.equal(schoolFirst.profile._company_url, "https://www.linkedin.com/company/vitalcura");
 
 const danielResolved = capture({name:"Daniel Brandão",title:"Founder | CEO | Banker | Board Member | CFO | Cyclist",place:"Brasil",company:"VitalCura",slug:"vitalcura",unrelated:"Outra empresa",modern:true,companyAsButton:true,school:"Universidade de São Paulo",includeExperience:true,messageType:"RESOLVE_COMPANY_LINK",expectedCompany:"VitalCura"});
 assert.equal(danielResolved.ok, true);
@@ -208,3 +234,20 @@ assert.equal(danielClicked.attempt_index, 0);
 assert.ok(danielClicked.target_count >= 1);
 
 console.log("Extractor regressions: VitalCura company About page, legacy, classless, title-less, noisy top-card, ranked href-less-current-company resolution, missing-name/title/company, generic-title and missing-location guards OK");
+
+
+// Forty synthetic DOM permutations; distinct from real authenticated profile acceptance.
+const simulatedNames=["Ana Silva","Bruno Oliveira","Carla Ribeiro","Daniel Moreira","Eduarda Nunes","Felipe Andrade","Gabriela Lima","Henrique Alves"];
+const simulatedCompanies=["Pagaleve","VitalCura","Ayude","Atlântico Tecnologia","Orion Payments"];
+const simulatedCities=["São Paulo, Brasil","Rio de Janeiro, Brasil","Porto Alegre, Brasil","Curitiba, Brasil","Recife, Brasil"];
+for (let i=0;i<40;i++) {
+ const name=simulatedNames[i%simulatedNames.length],company=simulatedCompanies[i%simulatedCompanies.length];
+ const slug="qa-company-"+i;
+ const title=["CEO & Founder","CFO","Diretor Financeiro","Head of Credit","CTO"][i%5];
+ const actual=capture({name,title,place:simulatedCities[i%5],company,slug,unrelated:"Empresa não relacionada",modern:i%2===0,prependNoise:i%3===0,includeExperience:i%4===0});
+ assert.equal(actual.ok,true,"synthetic extractor case "+i+" should succeed");
+ assert.equal(actual.profile.full_name,name);
+ assert.equal(actual.profile.current_company,company);
+ assert.equal(actual.profile.current_title,title);
+}
+console.log("Extractor: 40 synthetic DOM variants OK; real LinkedIn validation still required.");
