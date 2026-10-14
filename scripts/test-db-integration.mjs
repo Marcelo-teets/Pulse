@@ -185,7 +185,7 @@ try {
   await db.query(`
     INSERT INTO public.linkedin_company_captures
       (request_id,person_capture_id,company_name,description,website,employee_count,captured_at,owner_user_id)
-    VALUES ('00000000-0000-4000-8000-000000000003',$1,'Company Latest','new',
+    VALUES ('00000000-0000-4000-8000-000000000004',$1,'Company Latest','new',
       'https://new.example','51-200',NOW()+INTERVAL '1 second',$2)
   `,[dupId,u1]);
   const reviewSample=await db.query(`
