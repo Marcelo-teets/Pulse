@@ -186,6 +186,10 @@ const configPage = read("app/configuracao/page.js");
 assert.ok(configPage.includes("if (!response.ok || !payload.code)"), "pairing UI must surface backend failures");
 assert.ok(configPage.includes("finally"), "pairing UI loading state must always recover");
 
+const qualityRoute = read("app/api/quality/route.js");
+assert.ok(qualityRoute.includes("DISTINCT ON (linkedin_url)"), "QA sample must contain distinct LinkedIn people");
+assert.ok(qualityRoute.includes("captureIds=captures.rows.map"), "QA must select current capture IDs before reading reviews");
+assert.ok(qualityRoute.includes("r.capture_id=ANY($1::bigint[])"), "Historical reviews must not approve new profile recaptures");
 const operationsPage = read("app/operacao/page.js");
 assert.ok(operationsPage.includes("response.status === 403"), "operations page must handle forbidden access");
 
