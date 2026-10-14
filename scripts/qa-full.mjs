@@ -190,6 +190,9 @@ const qualityRoute = read("app/api/quality/route.js");
 assert.ok(qualityRoute.includes("DISTINCT ON (linkedin_url)"), "QA sample must contain distinct LinkedIn people");
 assert.ok(qualityRoute.includes("captureIds=captures.rows.map"), "QA must select current capture IDs before reading reviews");
 assert.ok(qualityRoute.includes("r.capture_id=ANY($1::bigint[])"), "Historical reviews must not approve new profile recaptures");
+assert.ok(qualityRoute.includes("reviewValuePresent(field,snapshot.rows[0][field])"), "Blank fields must never be reviewed as correct");
+assert.ok(qualityRoute.includes("newer.captured_at,newer.id") && qualityRoute.includes("status:409"), "Stale captures must be rejected by the POST endpoint");
+assert.ok(read("lib/quality-core.js").includes("export function reviewValuePresent("), "Missing factual evidence validation utility");
 const operationsPage = read("app/operacao/page.js");
 assert.ok(operationsPage.includes("response.status === 403"), "operations page must handle forbidden access");
 
