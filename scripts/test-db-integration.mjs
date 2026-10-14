@@ -166,6 +166,51 @@ try {
   await db.query("UPDATE public.linkedin_current_roles SET current_title='COO' WHERE person_id=$1",[cp1.rows[0].id]);
   const role1=await db.query("SELECT count(*)::int n FROM public.pulse_role_events WHERE person_id=$1",[cp1.rows[0].id]);
   assert.equal(role1.rows[0].n,2);
+
+  // QA sample must display distinct LinkedIn profiles instead of 50 repeat captures.
+  const duplicateCapture = await db.query(`
+    INSERT INTO public.linkedin_profile_captures
+      (request_id,full_name,linkedin_url,location,current_title,current_company,captured_at,raw_json,owner_user_id)
+    VALUES ('00000000-0000-4000-8000-000000000003','Pessoa Um','https://www.linkedin.com/in/pessoa-um',
+      'SP','CEO','Empresa QA',NOW() + INTERVAL '2 seconds','{}',$1)
+    RETURNING id
+  `,[u1]);
+  const dupId=duplicateCapture.rows[0].id;
+  await db.query(`
+    INSERT INTO public.linkedin_company_captures
+      (request_id,person_capture_id,company_name,description,website,employee_count,captured_at,owner_user_id)
+    VALUES ('00000000-0000-4000-8000-000000000003',$1,'Company Earlier','old',
+      'https://old.example','1-10',NOW(),$2)
+  `,[dupId,u1]);
+  await db.query(`
+    INSERT INTO public.linkedin_company_captures
+      (request_id,person_capture_id,company_name,description,website,employee_count,captured_at,owner_user_id)
+    VALUES ('00000000-0000-4000-8000-000000000003',$1,'Company Latest','new',
+      'https://new.example','51-200',NOW()+INTERVAL '1 second',$2)
+  `,[dupId,u1]);
+  const reviewSample=await db.query(`
+    WITH latest_profile AS (
+      SELECT DISTINCT ON (linkedin_url)
+        id,full_name,linkedin_url,location,current_title,current_company,captured_at
+      FROM public.linkedin_profile_captures
+      ORDER BY linkedin_url,captured_at DESC,id DESC
+    )
+    SELECT p.id,p.linkedin_url,p.current_title,c.company_name
+    FROM latest_profile p
+    LEFT JOIN LATERAL (
+      SELECT c.company_name,c.linkedin_url,c.description,c.website,c.employee_count
+      FROM public.linkedin_company_captures c
+      WHERE c.person_capture_id=p.id
+      ORDER BY c.captured_at DESC,c.id DESC LIMIT 1
+    ) c ON TRUE
+    ORDER BY p.captured_at DESC,p.id DESC LIMIT 50
+  `);
+  assert.equal(reviewSample.rowCount,2,"50-slot QA sample must count people, not captures");
+  const latestPerson=reviewSample.rows.find(row=>row.linkedin_url==="https://www.linkedin.com/in/pessoa-um");
+  assert.equal(String(latestPerson.id),String(dupId));
+  assert.equal(latestPerson.current_title,"CEO");
+  assert.equal(latestPerson.company_name,"Company Latest","QA must show only latest linked company capture");
+
   // Schema initialization must remain safe after data already exists.
   const schemaC = await import("../lib/schema.js?instance=c");
   await schemaC.ensureSchema(db);
