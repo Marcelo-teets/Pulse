@@ -7,7 +7,7 @@ const backgroundScript=fs.readFileSync("extensions/linkedin-capture/background.j
 const helperStart=backgroundScript.indexOf("function companyIdentityUrl(");
 const helperEnd=backgroundScript.indexOf("function completePerson(",helperStart);
 assert.ok(helperStart>=0&&helperEnd>helperStart,"canonical company URL helper must be testable");
-const companyHelpers=vm.runInNewContext(backgroundScript.slice(helperStart,helperEnd)+"\\n({companyIdentityUrl,companyAboutUrl})",{URL,encodeURIComponent,decodeURIComponent});
+const companyHelpers=vm.runInNewContext(backgroundScript.slice(helperStart,helperEnd)+"\n({companyIdentityUrl,companyAboutUrl})",{URL,encodeURIComponent,decodeURIComponent});
 const {companyIdentityUrl,companyAboutUrl}=companyHelpers;
 assert.equal(companyIdentityUrl("https://br.linkedin.com/company/ACME-123/about/?trk=footer"),"https://www.linkedin.com/company/acme-123");
 assert.equal(companyIdentityUrl("https://www.linkedin.com/company/acme-123/"),"https://www.linkedin.com/company/acme-123");
